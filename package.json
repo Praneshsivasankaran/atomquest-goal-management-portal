@@ -1,0 +1,20 @@
+{
+  "name": "atomquest-goal-management-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hackathon MVP for an Employee Goal Management System.",
+  "scripts": {
+    "dev": "python app/server.py --port 8000",
+    "test": "python -m unittest discover -s tests",
+    "reset-db": "python app/server.py --seed-only"
+  },
+  "keywords": [
+    "goal-management",
+    "okr",
+    "hackathon",
+    "hr-tech"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
+}
+
