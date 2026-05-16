@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -34,25 +35,30 @@ def hash_password(password: str) -> str:
 class Store:
     def __init__(self, db_path: str | Path = DEFAULT_DB):
         self.db_path = Path(db_path)
-        self.conn = sqlite3.connect(self.db_path)
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self.lock = threading.RLock()
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.create_schema()
         self.seed_if_empty()
 
     def close(self) -> None:
-        self.conn.close()
+        with self.lock:
+            self.conn.close()
 
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
-        cur = self.conn.execute(sql, params)
-        self.conn.commit()
-        return cur
+        with self.lock:
+            cur = self.conn.execute(sql, params)
+            self.conn.commit()
+            return cur
 
     def fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
-        return row_to_dict(self.conn.execute(sql, params).fetchone())
+        with self.lock:
+            return row_to_dict(self.conn.execute(sql, params).fetchone())
 
     def fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
-        return [dict(row) for row in self.conn.execute(sql, params).fetchall()]
+        with self.lock:
+            return [dict(row) for row in self.conn.execute(sql, params).fetchall()]
 
     def create_schema(self) -> None:
         self.conn.executescript(
