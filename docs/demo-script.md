@@ -2,13 +2,14 @@
 
 ## 1. Employee Journey
 
-1. Sign in as `employee@demo.com` with `demo123`.
-2. Review the seeded goal sheet.
-3. Open Smart Goal Assistant and copy a suggested goal into the draft form.
-4. Add or edit goals until total weightage is exactly `100%`.
-5. Submit the goal sheet for manager approval.
-6. After approval, return as Employee and try editing goals to show the lock behavior.
-7. If a quarter window is active, enter actual achievement and status.
+1. Open the auth screen and show both **Sign in** and **Sign up**.
+2. Create a new Employee account, or sign in as `employee@demo.com` with `demo123`.
+3. Review the seeded goal sheet.
+4. Open Smart Goal Assistant and copy a suggested goal into the draft form.
+5. Add or edit goals until total weightage is exactly `100%`.
+6. Submit the goal sheet for manager approval.
+7. After approval, return as Employee and try editing goals to show the lock behavior.
+8. If a quarter window is active, enter actual achievement and status.
 
 ## 2. Manager Journey
 
@@ -31,6 +32,7 @@
 ## Judge-Friendly Talking Points
 
 - Goal locking and Admin unlock are enforced server-side, not just hidden in the UI.
+- Self-service signup supports all three personas while seeded accounts keep the demo fast.
 - Weightage and max-goal validations are enforced before submission.
 - Shared goals use linked records, so the same KPI can be assigned across multiple employees.
 - Audit logs store actor, action, entity, before/after snapshots, reason, and timestamp.

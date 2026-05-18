@@ -97,6 +97,10 @@ class ApiServer(BaseHTTPRequestHandler):
             user = self.store.authenticate(payload.get("email", ""), payload.get("password", ""))
             return self.send_json({"token": create_token(user), "user": user})
 
+        if method == "POST" and path == "/api/auth/signup":
+            user = self.store.register_user(self.read_json())
+            return self.send_json({"token": create_token(user), "user": user}, 201)
+
         if method == "GET" and path == "/api/me":
             user = self.current_user()
             return self.send_json({"user": user})

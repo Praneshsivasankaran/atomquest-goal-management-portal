@@ -101,6 +101,33 @@ class StorageWorkflowTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(metrics["quarter_trends"]), 1)
 
+    def test_signup_creates_employee_goal_sheet(self) -> None:
+        store = self.make_store()
+
+        user = store.register_user({
+            "name": "New Employee",
+            "email": "new.employee@example.com",
+            "password": "demo123",
+            "role": "employee",
+            "department": "Sales",
+            "title": "Sales Associate",
+        })
+        sheet = store.get_sheet_for_user(user["id"])
+
+        self.assertEqual(user["role"], "employee")
+        self.assertEqual(sheet["state"], "draft")
+
+    def test_signup_rejects_duplicate_email(self) -> None:
+        store = self.make_store()
+
+        with self.assertRaises(DomainError):
+            store.register_user({
+                "name": "Duplicate",
+                "email": "employee@demo.com",
+                "password": "demo123",
+                "role": "employee",
+            })
+
 
 if __name__ == "__main__":
     unittest.main()

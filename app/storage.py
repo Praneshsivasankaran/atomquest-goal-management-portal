@@ -22,6 +22,7 @@ from app.business import (
 
 
 DEFAULT_DB = Path(__file__).resolve().parent.parent / "goal_portal.sqlite3"
+ROLES = {"employee", "manager", "admin"}
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -403,6 +404,50 @@ class Store:
         if not user or user["password_hash"] != hash_password(password):
             raise DomainError("Invalid email or password", 401)
         return self.user_public(user)
+
+    def register_user(self, payload: dict[str, Any]) -> dict[str, Any]:
+        name = str(payload.get("name", "")).strip()
+        email = str(payload.get("email", "")).strip().lower()
+        password = str(payload.get("password", ""))
+        role = str(payload.get("role", "employee")).strip().lower()
+        department = str(payload.get("department", "")).strip()
+        title = str(payload.get("title", "")).strip()
+
+        if not name:
+            raise DomainError("Name is required")
+        if "@" not in email or "." not in email:
+            raise DomainError("Enter a valid work email")
+        if len(password) < 6:
+            raise DomainError("Password must be at least 6 characters")
+        if role not in ROLES:
+            raise DomainError("Choose a valid role")
+        if self.fetchone("SELECT id FROM users WHERE lower(email)=lower(?)", (email,)):
+            raise DomainError("An account with this email already exists", 409)
+
+        if not department:
+            department = {"employee": "Sales", "manager": "Sales", "admin": "People Ops"}[role]
+        if not title:
+            title = {"employee": "Employee", "manager": "L1 Manager", "admin": "HR Admin"}[role]
+
+        manager_id = payload.get("manager_id")
+        if role == "employee":
+            manager = self.fetchone("SELECT id FROM users WHERE role='manager' ORDER BY id LIMIT 1")
+            manager_id = int(manager_id or manager["id"]) if manager else None
+        else:
+            manager_id = None
+
+        cur = self.execute(
+            """
+            INSERT INTO users (name, email, password_hash, role, title, department, manager_id)
+            VALUES (?,?,?,?,?,?,?)
+            """,
+            (name, email, hash_password(password), role, title, department, manager_id),
+        )
+        user = self.get_user(cur.lastrowid)
+        if role == "employee":
+            self.get_sheet_for_user(user["id"])
+        self.audit(user["id"], "user", user["id"], "signed_up", None, user, "Self-service signup")
+        return user
 
     def get_user(self, user_id: int) -> dict[str, Any]:
         user = self.fetchone("SELECT * FROM users WHERE id=?", (user_id,))

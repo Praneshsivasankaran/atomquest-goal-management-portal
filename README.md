@@ -14,6 +14,7 @@ The app covers the core problem statement:
 
 | Requirement | Status |
 | --- | --- |
+| Self-service signup for Employee, Manager, Admin | Built |
 | Employee goal sheet creation | Built |
 | UoM support: Numeric, %, Timeline, Zero-based | Built |
 | Weightage validation: total 100%, min 10%, max 8 goals | Built |
@@ -75,6 +76,7 @@ git push -u origin main
 ## Demo Notes
 
 - The default date-based windows follow the problem statement.
+- Use **Sign up** on the auth screen to create a fresh Employee, Manager, or Admin account.
 - For a live demo of quarterly progress capture, sign in as Admin and use **Open Demo Windows**.
 - Use the top-bar role switcher to move between Employee, Manager, and Admin without logging out manually.
 - The Employee dashboard includes a Smart Goal Assistant that fills goal drafts from local, rule-based suggestions.

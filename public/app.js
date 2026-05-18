@@ -3,11 +3,33 @@ const storageKey = "atomquest-token";
 
 let token = localStorage.getItem(storageKey);
 let state = null;
+let authMode = "signin";
 
 const demoUsers = [
   { role: "Employee", email: "employee@demo.com", password: "demo123" },
   { role: "Manager", email: "manager@demo.com", password: "demo123" },
   { role: "Admin / HR", email: "admin@demo.com", password: "demo123" },
+];
+
+const signupRoles = [
+  {
+    value: "employee",
+    label: "Employee",
+    title: "Create and track goals",
+    copy: "Draft goals, submit for approval, and update quarterly achievements.",
+  },
+  {
+    value: "manager",
+    label: "Manager",
+    title: "Approve and coach",
+    copy: "Review team goals, edit targets, approve sheets, and run check-ins.",
+  },
+  {
+    value: "admin",
+    label: "Admin / HR",
+    title: "Govern the cycle",
+    copy: "Configure windows, unlock exceptions, view reports, and monitor audit logs.",
+  },
 ];
 
 function esc(value) {
@@ -91,43 +113,111 @@ async function refresh() {
 }
 
 function renderLogin() {
+  const isSignup = authMode === "signup";
   app.innerHTML = `
     <main class="login">
       <section class="login-copy">
         <div>
           <div class="brand-mark"><span class="brand-dot">A</span> AtomQuest</div>
           <h1>Goal clarity for every employee, manager, and HR team.</h1>
-          <p>A browser-based portal for goal sheets, manager approval, quarterly check-ins, shared KPIs, reports, and audit-ready governance.</p>
+          <p>A polished goal management workspace for creation, approval, tracking, shared KPIs, analytics, escalations, and audit-ready governance.</p>
+          <div class="auth-proof-grid">
+            <div><strong>100%</strong><span>weightage validation</span></div>
+            <div><strong>3</strong><span>role-based journeys</span></div>
+            <div><strong>Q1-Q4</strong><span>check-in lifecycle</span></div>
+          </div>
         </div>
-        <p>Built as an enterprise HR-tech MVP with seeded journeys for all three required roles.</p>
+        <p>Built as an enterprise HR-tech MVP with signup, seeded demo profiles, smart goal suggestions, and submission-ready documentation.</p>
       </section>
       <section class="login-panel">
         <div class="login-card">
-          <h2>Sign in</h2>
-          <p>Use a demo profile to walk through the full lifecycle.</p>
-          <div class="demo-grid">
-            ${demoUsers
-              .map(
-                (user) => `
-                  <button class="demo-user" data-demo-email="${esc(user.email)}">
-                    ${esc(user.role)}
-                    <span>${esc(user.email)}</span>
-                  </button>
-                `,
-              )
-              .join("")}
+          <div class="auth-card-head">
+            <div>
+              <span class="eyebrow">Secure workspace</span>
+              <h2>${isSignup ? "Create your account" : "Welcome back"}</h2>
+              <p>${isSignup ? "Choose a role and start in the right workspace immediately." : "Sign in with a demo profile or your newly created account."}</p>
+            </div>
           </div>
-          <form data-form="login">
-            <div class="field">
-              <label>Email</label>
-              <input name="email" type="email" value="employee@demo.com" required />
-            </div>
-            <div class="field">
-              <label>Password</label>
-              <input name="password" type="password" value="demo123" required />
-            </div>
-            <button class="btn" type="submit">Enter Portal</button>
-          </form>
+          <div class="auth-tabs">
+            <button class="${!isSignup ? "active" : ""}" data-auth-mode="signin">Sign in</button>
+            <button class="${isSignup ? "active" : ""}" data-auth-mode="signup">Sign up</button>
+          </div>
+          ${
+            isSignup
+              ? `
+                <form data-form="signup" class="auth-form">
+                  <div class="role-picker">
+                    ${signupRoles
+                      .map(
+                        (role, index) => `
+                          <label class="role-card ${index === 0 ? "selected" : ""}">
+                            <input type="radio" name="role" value="${role.value}" ${index === 0 ? "checked" : ""} />
+                            <span class="role-icon">${role.label.charAt(0)}</span>
+                            <strong>${esc(role.label)}</strong>
+                            <em>${esc(role.title)}</em>
+                            <small>${esc(role.copy)}</small>
+                          </label>
+                        `,
+                      )
+                      .join("")}
+                  </div>
+                  <div class="form-grid">
+                    <div class="field">
+                      <label>Full Name</label>
+                      <input name="name" required placeholder="Aarav Mehta" autocomplete="name" />
+                    </div>
+                    <div class="field">
+                      <label>Work Email</label>
+                      <input name="email" type="email" required placeholder="aarav@company.com" autocomplete="email" />
+                    </div>
+                    <div class="field">
+                      <label>Department</label>
+                      <select name="department">
+                        <option>Sales</option>
+                        <option>Customer Success</option>
+                        <option>Operations</option>
+                        <option>Product</option>
+                        <option>People Ops</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label>Job Title</label>
+                      <input name="title" placeholder="Sales Associate" />
+                    </div>
+                    <div class="field wide">
+                      <label>Password</label>
+                      <input name="password" type="password" required minlength="6" placeholder="Minimum 6 characters" autocomplete="new-password" />
+                    </div>
+                  </div>
+                  <button class="btn auth-submit" type="submit">Create Account</button>
+                </form>
+              `
+              : `
+                <div class="demo-grid">
+                  ${demoUsers
+                    .map(
+                      (user) => `
+                        <button class="demo-user" data-demo-email="${esc(user.email)}">
+                          ${esc(user.role)}
+                          <span>${esc(user.email)}</span>
+                        </button>
+                      `,
+                    )
+                    .join("")}
+                </div>
+                <form data-form="login" class="auth-form">
+                  <div class="field">
+                    <label>Email</label>
+                    <input name="email" type="email" value="employee@demo.com" required autocomplete="email" />
+                  </div>
+                  <div class="field">
+                    <label>Password</label>
+                    <input name="password" type="password" value="demo123" required autocomplete="current-password" />
+                  </div>
+                  <button class="btn auth-submit" type="submit">Enter Portal</button>
+                </form>
+              `
+          }
         </div>
       </section>
     </main>
@@ -953,7 +1043,7 @@ function formPayload(form) {
   if (form.querySelectorAll('[name="recipient_ids"]').length) {
     payload.recipient_ids = [...form.querySelectorAll('[name="recipient_ids"]:checked')].map((input) => Number(input.value));
   }
-  for (const key of ["weightage", "target_value", "default_weightage", "primary_owner_id", "actual_value"]) {
+  for (const key of ["weightage", "target_value", "default_weightage", "primary_owner_id", "actual_value", "manager_id"]) {
     if (payload[key] !== undefined && payload[key] !== "") payload[key] = Number(payload[key]);
   }
   for (const key of Object.keys(payload)) {
@@ -975,6 +1065,13 @@ async function handleSubmit(event) {
       token = result.token;
       localStorage.setItem(storageKey, token);
       showToast(`Welcome, ${result.user.name}`);
+      return refresh();
+    }
+    if (kind === "signup") {
+      const result = await api("/api/auth/signup", { method: "POST", body: JSON.stringify(payload) });
+      token = result.token;
+      localStorage.setItem(storageKey, token);
+      showToast(`Account created for ${result.user.name}`);
       return refresh();
     }
     if (kind === "create-goal") {
@@ -1016,6 +1113,13 @@ async function handleSubmit(event) {
 }
 
 async function handleClick(event) {
+  const modeButton = event.target.closest("[data-auth-mode]");
+  if (modeButton) {
+    authMode = modeButton.dataset.authMode;
+    renderLogin();
+    return;
+  }
+
   const demo = event.target.closest("[data-demo-email]");
   if (demo) {
     const email = demo.dataset.demoEmail;

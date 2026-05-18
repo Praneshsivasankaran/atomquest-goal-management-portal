@@ -9,6 +9,7 @@
   - Admin: `admin@demo.com` / `demo123`
 - Demo script covering one complete journey per role.
 - Mention bonus foundations:
+  - Self-service signup by role
   - Shared goals
   - Audit trail
   - Smart goal suggestions
