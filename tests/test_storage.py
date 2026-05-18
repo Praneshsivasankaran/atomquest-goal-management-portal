@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.business import DomainError
+from app.business import DomainError, MAX_GOALS_ERROR, MAX_GOALS_PER_EMPLOYEE
 from app.storage import Store
 
 
@@ -38,6 +38,39 @@ class StorageWorkflowTests(unittest.TestCase):
 
         self.assertEqual(unlocked["state"], "unlocked")
         self.assertEqual(updated["weightage"], 40)
+
+    def test_create_goal_uses_shared_max_goal_constant(self) -> None:
+        store = self.make_store()
+        user = store.register_user({
+            "name": "Limit Tester",
+            "email": "limit.tester@example.com",
+            "password": "demo123",
+            "role": "employee",
+        })
+
+        for index in range(MAX_GOALS_PER_EMPLOYEE):
+            store.create_goal(user["id"], user["id"], {
+                "thrust_area": "Execution",
+                "title": f"Goal {index + 1}",
+                "description": "Keep the cap behavior predictable.",
+                "uom_type": "numeric",
+                "direction": "min",
+                "target_value": 100,
+                "weightage": 10,
+            })
+
+        with self.assertRaises(DomainError) as ctx:
+            store.create_goal(user["id"], user["id"], {
+                "thrust_area": "Execution",
+                "title": "Goal over limit",
+                "description": "This one should not be accepted.",
+                "uom_type": "numeric",
+                "direction": "min",
+                "target_value": 100,
+                "weightage": 10,
+            })
+
+        self.assertEqual(ctx.exception.message, MAX_GOALS_ERROR)
 
     def test_shared_goal_progress_syncs_to_linked_recipients(self) -> None:
         store = self.make_store()
@@ -76,6 +109,17 @@ class StorageWorkflowTests(unittest.TestCase):
         actions = {log["action"] for log in logs}
         self.assertIn("submitted", actions)
         self.assertIn("approved_and_locked", actions)
+
+    def test_approve_sheet_revalidates_after_manager_edits(self) -> None:
+        store = self.make_store()
+
+        submitted = store.submit_sheet(1)
+        store.update_goal(2, submitted["goals"][0]["id"], {"weightage": 45}, manager_edit=True)
+
+        with self.assertRaises(DomainError) as ctx:
+            store.approve_sheet(2, submitted["id"])
+
+        self.assertIn("exactly 100", ctx.exception.message)
 
     def test_goal_suggestions_use_employee_context(self) -> None:
         store = self.make_store()
@@ -148,6 +192,39 @@ class StorageWorkflowTests(unittest.TestCase):
 
         self.assertTrue(workbook.startswith(b"PK"))
         self.assertIn(b"xl/worksheets/sheet1.xml", workbook)
+
+    def test_login_migrates_legacy_sha256_to_scrypt(self) -> None:
+        store = self.make_store()
+        # Force-rewrite the demo user's hash back to legacy SHA-256 (as if from an
+        # older deployment) so we can assert the migration on login works.
+        from app.storage import legacy_sha256
+        store.execute(
+            "UPDATE users SET password_hash=? WHERE email='employee@demo.com'",
+            (legacy_sha256("demo123"),),
+        )
+        # Login succeeds with the legacy hash.
+        store.authenticate("employee@demo.com", "demo123")
+        # Hash is now upgraded.
+        row = store.fetchone("SELECT password_hash FROM users WHERE email='employee@demo.com'")
+        self.assertTrue(row["password_hash"].startswith("scrypt$"))
+
+    def test_seed_health_requires_core_demo_roles(self) -> None:
+        store = self.make_store()
+        store.execute("DELETE FROM users WHERE role='admin'")
+
+        with self.assertRaises(RuntimeError) as ctx:
+            store.assert_seed_health()
+
+        self.assertIn("admin", str(ctx.exception))
+
+    def test_seed_health_requires_demo_sheet_states(self) -> None:
+        store = self.make_store()
+        store.execute("UPDATE goal_sheets SET state='draft' WHERE state='locked'")
+
+        with self.assertRaises(RuntimeError) as ctx:
+            store.assert_seed_health()
+
+        self.assertIn("locked", str(ctx.exception))
 
 
 if __name__ == "__main__":

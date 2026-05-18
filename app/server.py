@@ -2,25 +2,91 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import mimetypes
 import os
 import re
 import sys
+import threading
+import time
+import traceback
+from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.auth import create_token, decode_token
+from app.auth import assert_secret_is_safe, create_token, decode_token
 from app.business import DomainError, utc_now
 from app.storage import DEFAULT_DB, Store
 
 
 PUBLIC = ROOT / "public"
+try:
+    DEMO_TIMEZONE = ZoneInfo("Asia/Kolkata")
+except ZoneInfoNotFoundError:
+    DEMO_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
+
+LOG = logging.getLogger("atomquest.server")
+# Authenticated POST/PATCH/DELETE must come from a known Origin. Defaults match the
+# local-dev URLs; production sets APP_ORIGIN to the hosted URL.
+ALLOWED_ORIGINS = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv("APP_ORIGIN", "http://127.0.0.1:8000,http://localhost:8000").split(",")
+    if origin.strip()
+}
+
+# Token-bucket rate limit per source IP for /api/auth/* endpoints.
+AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
+AUTH_RATE_LIMIT_MAX_HITS = 5
+_auth_attempts: dict[str, deque[float]] = defaultdict(deque)
+_auth_attempts_lock = threading.Lock()
+
+
+def hit_auth_rate_limit(ip: str) -> int:
+    """Record an attempt from `ip`. Return seconds-to-retry if rate limit exceeded, else 0."""
+    now = time.monotonic()
+    cutoff = now - AUTH_RATE_LIMIT_WINDOW_SECONDS
+    with _auth_attempts_lock:
+        bucket = _auth_attempts[ip]
+        while bucket and bucket[0] < cutoff:
+            bucket.popleft()
+        if len(bucket) >= AUTH_RATE_LIMIT_MAX_HITS:
+            retry_after = max(1, int(AUTH_RATE_LIMIT_WINDOW_SECONDS - (now - bucket[0])))
+            return retry_after
+        bucket.append(now)
+        return 0
+
+
+def current_demo_date() -> str:
+    return datetime.now(DEMO_TIMEZONE).date().isoformat()
+
+
+def assert_manager_owns_sheet(store: Store, manager_id: int, sheet_id: int) -> dict[str, Any]:
+    sheet = store.fetchone("SELECT * FROM goal_sheets WHERE id=?", (sheet_id,))
+    if not sheet:
+        raise DomainError("Goal sheet not found for this manager", 404)
+    employee = store.get_user(sheet["user_id"])
+    if employee.get("manager_id") != manager_id:
+        raise DomainError("Goal sheet not found for this manager", 404)
+    return sheet
+
+
+def assert_manager_owns_goal(store: Store, manager_id: int, goal_id: int) -> dict[str, Any]:
+    goal = store.get_goal(goal_id)
+    sheet = store.fetchone("SELECT * FROM goal_sheets WHERE id=?", (goal["sheet_id"],))
+    if not sheet:
+        raise DomainError("Goal not found for this manager", 404)
+    employee = store.get_user(sheet["user_id"])
+    if employee.get("manager_id") != manager_id:
+        raise DomainError("Goal not found for this manager", 404)
+    return goal
 
 
 class ApiServer(BaseHTTPRequestHandler):
@@ -47,13 +113,40 @@ class ApiServer(BaseHTTPRequestHandler):
             parsed = urlparse(self.path)
             path = parsed.path
             if path.startswith("/api/"):
+                if method in ("POST", "PATCH", "DELETE"):
+                    self._assert_origin_allowed()
                 self.route_api(method, path, parse_qs(parsed.query))
             else:
                 self.serve_static(path)
         except DomainError as exc:
             self.send_json({"error": exc.message}, exc.status)
-        except Exception as exc:
-            self.send_json({"error": "Something went wrong", "detail": str(exc)}, 500)
+        except Exception:
+            # Log full traceback server-side; never leak it to the client.
+            LOG.error("Unhandled error on %s %s\n%s", method, self.path, traceback.format_exc())
+            self.send_json({"error": "Something went wrong"}, 500)
+
+    def _assert_origin_allowed(self) -> None:
+        """Reject state-changing API calls from unexpected origins.
+
+        Why: tokens travel in the Authorization header, so a logged-in user visiting
+        a malicious page would otherwise have their browser attach the token to
+        cross-origin POSTs. Comparing Origin (or Referer fallback) blocks that.
+        """
+        origin = (self.headers.get("Origin") or "").rstrip("/")
+        if not origin:
+            referer = (self.headers.get("Referer") or "").rstrip("/")
+            if not referer:
+                return  # same-origin tools (curl, mobile) don't send Origin/Referer
+            parsed = urlparse(referer)
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+        if origin not in ALLOWED_ORIGINS:
+            raise DomainError("Origin not allowed", 403)
+
+    def _client_ip(self) -> str:
+        forwarded = self.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return self.client_address[0] if self.client_address else "unknown"
 
     def read_json(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0"))
@@ -93,11 +186,31 @@ class ApiServer(BaseHTTPRequestHandler):
 
     def route_api(self, method: str, path: str, query: dict[str, list[str]]) -> None:
         if method == "POST" and path == "/api/auth/login":
+            retry_after = hit_auth_rate_limit(self._client_ip())
+            if retry_after:
+                self.send_response(429)
+                self.send_header("Retry-After", str(retry_after))
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                body = json.dumps({"error": f"Too many sign-in attempts. Try again in {retry_after}s."}).encode("utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             payload = self.read_json()
             user = self.store.authenticate(payload.get("email", ""), payload.get("password", ""))
             return self.send_json({"token": create_token(user), "user": user})
 
         if method == "POST" and path == "/api/auth/signup":
+            retry_after = hit_auth_rate_limit(self._client_ip())
+            if retry_after:
+                self.send_response(429)
+                self.send_header("Retry-After", str(retry_after))
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                body = json.dumps({"error": f"Too many signup attempts. Try again in {retry_after}s."}).encode("utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             user = self.store.register_user(self.read_json())
             return self.send_json({"token": create_token(user), "user": user}, 201)
 
@@ -168,22 +281,30 @@ class ApiServer(BaseHTTPRequestHandler):
         match = re.fullmatch(r"/api/manager/goals/(\d+)", path)
         if match and method == "PATCH":
             user = self.require_role("manager")
-            return self.send_json(self.store.update_goal(user["id"], int(match.group(1)), self.read_json(), manager_edit=True))
+            goal_id = int(match.group(1))
+            assert_manager_owns_goal(self.store, user["id"], goal_id)
+            return self.send_json(self.store.update_goal(user["id"], goal_id, self.read_json(), manager_edit=True))
 
         match = re.fullmatch(r"/api/manager/sheets/(\d+)/approve", path)
         if match and method == "POST":
             user = self.require_role("manager")
-            return self.send_json(self.store.approve_sheet(user["id"], int(match.group(1))))
+            sheet_id = int(match.group(1))
+            assert_manager_owns_sheet(self.store, user["id"], sheet_id)
+            return self.send_json(self.store.approve_sheet(user["id"], sheet_id))
 
         match = re.fullmatch(r"/api/manager/sheets/(\d+)/return", path)
         if match and method == "POST":
             user = self.require_role("manager")
-            return self.send_json(self.store.return_sheet(user["id"], int(match.group(1)), self.read_json().get("comment", "")))
+            sheet_id = int(match.group(1))
+            assert_manager_owns_sheet(self.store, user["id"], sheet_id)
+            return self.send_json(self.store.return_sheet(user["id"], sheet_id, self.read_json().get("comment", "")))
 
         match = re.fullmatch(r"/api/manager/sheets/(\d+)/checkins", path)
         if match and method == "POST":
             user = self.require_role("manager")
-            return self.send_json(self.store.add_checkin(user["id"], int(match.group(1)), self.read_json()))
+            sheet_id = int(match.group(1))
+            assert_manager_owns_sheet(self.store, user["id"], sheet_id)
+            return self.send_json(self.store.add_checkin(user["id"], sheet_id, self.read_json()))
 
         if method == "POST" and path == "/api/admin/shared-goals":
             user = self.require_role("admin")
@@ -191,7 +312,8 @@ class ApiServer(BaseHTTPRequestHandler):
 
         if method == "POST" and path == "/api/admin/demo-mode":
             user = self.require_role("admin")
-            windows = self.store.activate_demo_windows(user["id"], self.read_json().get("today", "2026-05-18"))
+            today = self.read_json().get("today") or current_demo_date()
+            windows = self.store.activate_demo_windows(user["id"], today)
             return self.send_json({"windows": windows})
 
         match = re.fullmatch(r"/api/admin/users/(\d+)", path)
@@ -242,6 +364,8 @@ class ApiServer(BaseHTTPRequestHandler):
 
 
 def run_server(port: int, db_path: str | Path = DEFAULT_DB, host: str = "127.0.0.1") -> None:
+    assert_secret_is_safe(host)
+    logging.basicConfig(level=os.getenv("APP_LOG_LEVEL", "INFO"))
     ApiServer.store = Store(db_path)
     httpd = ThreadingHTTPServer((host, port), ApiServer)
     print(f"Goal portal running at http://{host}:{port}")

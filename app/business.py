@@ -1,7 +1,13 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # Python < 3.9 fallback (shouldn't happen on target runtime)
+    ZoneInfo = None  # type: ignore
 
 
 class DomainError(ValueError):
@@ -19,10 +25,28 @@ DIRECTIONS = {"min", "max", "timeline", "zero"}
 QUARTERS = {"q1", "q2", "q3", "q4"}
 PROGRESS_STATUSES = {"not_started", "on_track", "completed"}
 EDITABLE_STATES = {"draft", "returned", "unlocked"}
+MAX_GOALS_PER_EMPLOYEE = 8
+MAX_GOALS_ERROR = f"An employee can have a maximum of {MAX_GOALS_PER_EMPLOYEE} goals"
+DEFAULT_CYCLE_TZ = "Asia/Kolkata"
 
 
 def utc_now() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+def cycle_today(tz_name: str | None = None) -> date:
+    """Return today's date in the cycle's configured timezone (default Asia/Kolkata).
+
+    Why: cycles are stamped with a timezone but `date.today()` returns the *server's*
+    local date. On a UTC-hosted Render box this is off by up to 5.5h around boundaries.
+    """
+    name = tz_name or DEFAULT_CYCLE_TZ
+    if ZoneInfo is None:
+        return datetime.utcnow().date()
+    try:
+        return datetime.now(ZoneInfo(name)).date()
+    except Exception:
+        return datetime.now(timezone.utc).date()
 
 
 def parse_date(value: str | None) -> date | None:
@@ -74,17 +98,20 @@ def validate_goal_payload(payload: dict[str, Any], partial: bool = False) -> Non
 def validate_goal_sheet(goals: list[dict[str, Any]]) -> None:
     if not goals:
         raise DomainError("Add at least one goal before submitting")
-    if len(goals) > 8:
-        raise DomainError("An employee can have a maximum of 8 goals")
+    if len(goals) >= MAX_GOALS_PER_EMPLOYEE:
+        raise DomainError(MAX_GOALS_ERROR)
 
-    total = 0.0
+    try:
+        total = sum(Decimal(str(g.get("weightage", 0))) for g in goals)
+    except InvalidOperation as exc:
+        raise DomainError("Weightage must be a number") from exc
+
     for goal in goals:
-        weightage = to_number(goal.get("weightage"), "Weightage")
-        if weightage < 10:
+        weightage = Decimal(str(goal.get("weightage", 0)))
+        if weightage < Decimal("10"):
             raise DomainError("Each goal must have at least 10% weightage")
-        total += weightage
 
-    if round(total, 2) != 100:
+    if total != Decimal("100"):
         raise DomainError(f"Total goal weightage must be exactly 100%. Current total is {total:g}%.")
 
 
@@ -147,15 +174,14 @@ def validate_progress_payload(goal: dict[str, Any], payload: dict[str, Any]) -> 
         to_number(payload.get("actual_value"), "Actual achievement")
 
 
-def ensure_window_open(window: dict[str, Any] | None, today: date | None = None) -> None:
+def ensure_window_open(window: dict[str, Any] | None, today: date | None = None, tz_name: str | None = None) -> None:
     if not window:
         raise DomainError("No active window is configured for this action", 409)
 
-    today = today or date.today()
+    today = today or cycle_today(tz_name)
     opens = parse_date(window.get("opens_on"))
     closes = parse_date(window.get("closes_on"))
     if opens and today < opens:
         raise DomainError(f"This window opens on {opens.isoformat()}", 409)
     if closes and today > closes:
         raise DomainError(f"This window closed on {closes.isoformat()}", 409)
-

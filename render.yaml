@@ -10,4 +10,9 @@ services:
         generateValue: true
       - key: APP_DEBUG
         value: "0"
+      # After first deploy, set APP_ORIGIN in the Render dashboard to your live URL
+      # (e.g. https://atomquest-goal-management-portal.onrender.com). Without this,
+      # state-changing API calls from the browser get blocked by the CSRF guard.
+      - key: APP_ORIGIN
+        sync: false
 
