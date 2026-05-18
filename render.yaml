@@ -2,7 +2,7 @@ services:
   - type: web
     name: atomquest-goal-management-portal
     runtime: python
-    buildCommand: ""
+    buildCommand: "pip install -r requirements.txt"
     startCommand: "python app/server.py --host 0.0.0.0 --port $PORT"
     plan: free
     envVars:

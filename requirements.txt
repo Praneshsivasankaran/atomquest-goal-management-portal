@@ -1,0 +1,2 @@
+# AtomQuest Goal Portal uses only the Python standard library by design.
+# This file exists so Render's Python runtime auto-detection succeeds.
