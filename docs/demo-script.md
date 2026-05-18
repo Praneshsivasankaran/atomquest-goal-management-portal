@@ -25,9 +25,10 @@
 2. Review completion metrics and cycle windows.
 3. Click **Open Demo Windows** if the demo needs progress capture now.
 4. Show QoQ trends, manager effectiveness, notification previews, and escalation monitor.
-5. Create a shared goal and push it to employees.
-6. Unlock a locked goal sheet with a reason.
-7. Export the achievement CSV and show audit logs.
+5. Update a user in Organization Hierarchy to show HR control over departments and reporting lines.
+6. Create a shared goal and push it to employees.
+7. Unlock a locked goal sheet with a reason.
+8. Export the achievement CSV and Excel reports, then show audit logs.
 
 ## Judge-Friendly Talking Points
 
@@ -36,6 +37,8 @@
 - Weightage and max-goal validations are enforced before submission.
 - Shared goals use linked records, so the same KPI can be assigned across multiple employees.
 - Audit logs store actor, action, entity, before/after snapshots, reason, and timestamp.
+- HR can manage org hierarchy without database changes or developer help.
+- Reports download as both CSV and Excel for appraisal workflows.
 - Smart suggestions are offline and deterministic, so the demo does not depend on external AI credits.
 - Demo mode opens cycle windows locally so quarterly capture can be shown on demand.
 - The MVP is low-cost because it can run on a small web service plus managed PostgreSQL.

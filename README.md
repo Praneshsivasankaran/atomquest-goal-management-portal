@@ -7,6 +7,7 @@ The app covers the core problem statement:
 - Employee goal creation with UoM, targets, and weightage validation.
 - Manager approval, return-for-rework, inline edits, and lock workflow.
 - Admin/HR controls for cycle windows, shared goals, unlocks, reports, and audit logs.
+- Admin organization hierarchy management.
 - Quarterly achievement tracking with system-computed progress scores.
 - Role-based dashboards for Employee, Manager, and Admin journeys.
 
@@ -21,10 +22,11 @@ The app covers the core problem statement:
 | Manager approval, inline edits, return for rework | Built |
 | Goal locking after approval | Built |
 | Admin unlock with audit reason | Built |
+| Admin org hierarchy management | Built |
 | Shared departmental goals | Built |
 | Quarterly achievement capture | Built |
 | Planned vs actual manager check-ins | Built |
-| CSV achievement report | Built |
+| CSV and Excel achievement reports | Built |
 | Audit trail | Built |
 | Smart goal suggestions | Built |
 | QoQ trends and manager effectiveness analytics | Built |
@@ -80,6 +82,8 @@ git push -u origin main
 - For a live demo of quarterly progress capture, sign in as Admin and use **Open Demo Windows**.
 - Use the top-bar role switcher to move between Employee, Manager, and Admin without logging out manually.
 - The Employee dashboard includes a Smart Goal Assistant that fills goal drafts from local, rule-based suggestions.
+- Admin can update organization hierarchy, departments, titles, and manager mapping directly from the HR console.
+- Manager/Admin can download reports as either CSV or Excel.
 - The app intentionally keeps setup cheap: no paid APIs, no build step, and no dependency install required for the local demo.
 
 ## Deployment

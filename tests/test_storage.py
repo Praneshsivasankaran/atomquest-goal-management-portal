@@ -128,6 +128,27 @@ class StorageWorkflowTests(unittest.TestCase):
                 "role": "employee",
             })
 
+    def test_admin_can_update_org_hierarchy(self) -> None:
+        store = self.make_store()
+
+        updated = store.update_user(3, 5, {
+            "role": "employee",
+            "department": "Product",
+            "title": "Product Operations Analyst",
+            "manager_id": 2,
+        })
+
+        self.assertEqual(updated["department"], "Product")
+        self.assertEqual(updated["manager_id"], 2)
+
+    def test_achievement_xlsx_returns_workbook_bytes(self) -> None:
+        store = self.make_store()
+
+        workbook = store.achievement_xlsx()
+
+        self.assertTrue(workbook.startswith(b"PK"))
+        self.assertIn(b"xl/worksheets/sheet1.xml", workbook)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -119,6 +119,16 @@ class ApiServer(BaseHTTPRequestHandler):
             self.end_headers()
             return self.wfile.write(csv_body.encode("utf-8"))
 
+        if method == "GET" and path == "/api/reports/achievement.xlsx":
+            self.require_role("manager", "admin")
+            body = self.store.achievement_xlsx()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.send_header("Content-Disposition", "attachment; filename=achievement-report.xlsx")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return self.wfile.write(body)
+
         if method == "GET" and path == "/api/goals/suggestions":
             user = self.require_role("employee")
             return self.send_json({"suggestions": self.store.goal_suggestions(user["id"])})
@@ -183,6 +193,12 @@ class ApiServer(BaseHTTPRequestHandler):
             user = self.require_role("admin")
             windows = self.store.activate_demo_windows(user["id"], self.read_json().get("today", "2026-05-18"))
             return self.send_json({"windows": windows})
+
+        match = re.fullmatch(r"/api/admin/users/(\d+)", path)
+        if match and method == "PATCH":
+            user = self.require_role("admin")
+            updated = self.store.update_user(user["id"], int(match.group(1)), self.read_json())
+            return self.send_json(updated)
 
         match = re.fullmatch(r"/api/admin/sheets/(\d+)/unlock", path)
         if match and method == "POST":

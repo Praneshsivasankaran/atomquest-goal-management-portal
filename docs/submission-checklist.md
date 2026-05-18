@@ -11,6 +11,8 @@
 - Mention bonus foundations:
   - Self-service signup by role
   - Shared goals
+  - Admin org hierarchy management
+  - CSV and Excel reports
   - Audit trail
   - Smart goal suggestions
   - QoQ trend and manager effectiveness analytics

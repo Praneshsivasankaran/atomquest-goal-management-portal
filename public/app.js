@@ -716,13 +716,15 @@ function renderManager() {
         <p>Review submitted goals, tune targets or weightage, approve clean sheets, and document quarterly check-ins.</p>
         <div class="actions">
           <span class="status submitted">${approvals.length} Pending Approvals</span>
-          <button class="btn secondary" data-action="export-report">Export Achievement CSV</button>
+          <button class="btn secondary" data-action="export-report" data-format="csv">Export CSV</button>
+          <button class="btn secondary" data-action="export-report" data-format="xlsx">Export Excel</button>
         </div>
       </div>
       ${renderCyclePanel()}
     </section>
     ${renderMetrics()}
     ${renderAnalyticsPanel()}
+    ${renderReportCenter()}
     ${renderNotifications()}
     <section class="panel">
       <h2>Approval Queue</h2>
@@ -836,7 +838,8 @@ function renderAdmin() {
         <h2>Admin / HR Control Center</h2>
         <p>Configure cycles, push shared KPIs, unlock exceptions, export reports, and inspect the audit trail.</p>
         <div class="actions">
-          <button class="btn" data-action="export-report">Export Achievement CSV</button>
+          <button class="btn" data-action="export-report" data-format="xlsx">Export Excel</button>
+          <button class="btn secondary" data-action="export-report" data-format="csv">Export CSV</button>
           <button class="btn secondary" data-action="demo-mode">Open Demo Windows</button>
           <span class="status locked">${state.metrics.completion_rate}% Complete</span>
         </div>
@@ -845,6 +848,7 @@ function renderAdmin() {
     </section>
     ${renderMetrics()}
     ${renderAnalyticsPanel()}
+    ${renderReportCenter()}
     ${renderNotifications()}
     <section class="grid-two">
       <div class="panel">
@@ -857,6 +861,11 @@ function renderAdmin() {
         <p>Title and target stay read-only for recipients; only weightage is editable.</p>
         ${renderSharedGoalForm()}
       </div>
+    </section>
+    <section class="panel" style="margin-top:18px">
+      <h2>Organization Hierarchy</h2>
+      <p>Manage roles, departments, titles, and manager mapping from one HR console.</p>
+      ${renderOrgDirectory()}
     </section>
     <section class="panel" style="margin-top:18px">
       <h2>Goal Sheet Exceptions</h2>
@@ -872,6 +881,34 @@ function renderAdmin() {
       <h2>Audit Trail</h2>
       <p>Every meaningful workflow change is stored for governance review.</p>
       ${renderAuditLog()}
+    </section>
+  `;
+}
+
+function renderReportCenter() {
+  return `
+    <section class="panel" style="margin-top:18px">
+      <h2>Report Center</h2>
+      <p>Download planned-vs-actual achievement data for appraisal discussions and HR governance.</p>
+      <div class="notice-grid">
+        <div class="notice">
+          <span class="chip">CSV</span>
+          <strong>Achievement report</strong>
+          <span>Lightweight export for quick review, filtering, and upload into other tools.</span>
+          <button class="btn secondary" style="margin-top:12px" data-action="export-report" data-format="csv">Download CSV</button>
+        </div>
+        <div class="notice">
+          <span class="chip">Excel</span>
+          <strong>Achievement workbook</strong>
+          <span>Excel-ready report with planned targets, actual achievement, statuses, and scores.</span>
+          <button class="btn" style="margin-top:12px" data-action="export-report" data-format="xlsx">Download XLSX</button>
+        </div>
+        <div class="notice">
+          <span class="chip">Audit</span>
+          <strong>Governance trail</strong>
+          <span>Admin audit logs capture who changed what, when it happened, and why.</span>
+        </div>
+      </div>
     </section>
   `;
 }
@@ -977,6 +1014,76 @@ function renderSharedGoalForm() {
       </div>
       <button class="btn" type="submit">Push Shared Goal</button>
     </form>
+    ${renderSharedGoalLibrary()}
+  `;
+}
+
+function renderSharedGoalLibrary() {
+  const sharedGoals = state.shared_goals || [];
+  if (!sharedGoals.length) return `<div class="empty" style="margin-top:14px">No shared goals pushed yet.</div>`;
+  return `
+    <div class="table-wrap" style="margin-top:14px">
+      <table>
+        <thead><tr><th>Shared KPI</th><th>UoM</th><th>Target</th><th>Primary Owner</th></tr></thead>
+        <tbody>
+          ${sharedGoals
+            .map((goal) => {
+              const owner = (state.employees || []).find((employee) => employee.id === goal.primary_owner_id);
+              return `
+                <tr>
+                  <td><strong>${esc(goal.title)}</strong><br /><small>${esc(goal.thrust_area)}</small></td>
+                  <td>${esc(titleCase(goal.uom_type))}</td>
+                  <td>${esc(goal.target_value ?? goal.target_date ?? "-")}</td>
+                  <td>${esc(owner?.name || "-")}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderOrgDirectory() {
+  const users = state.org_users || [];
+  if (!users.length) return `<div class="empty">No users available.</div>`;
+  return `
+    <div class="org-directory">
+      <div class="org-header">
+        <span>Person</span>
+        <span>Role</span>
+        <span>Department</span>
+        <span>Manager</span>
+        <span></span>
+      </div>
+      ${users
+        .map(
+          (user) => `
+            <form data-form="org-user" data-user-id="${user.id}" class="org-row">
+              <div>
+                <input name="name" value="${esc(user.name)}" />
+                <input name="title" value="${esc(user.title || "")}" style="margin-top:8px" />
+                <small>${esc(user.email)}</small>
+              </div>
+              <select name="role">
+                ${["employee", "manager", "admin"].map((role) => `<option value="${role}" ${user.role === role ? "selected" : ""}>${esc(titleCase(role))}</option>`).join("")}
+              </select>
+              <select name="department">
+                ${["Sales", "Customer Success", "Operations", "Product", "People Ops"].map((department) => `<option ${user.department === department ? "selected" : ""}>${esc(department)}</option>`).join("")}
+              </select>
+              <select name="manager_id">
+                <option value="">No manager</option>
+                ${(state.managers || [])
+                  .map((manager) => `<option value="${manager.id}" ${user.manager_id === manager.id ? "selected" : ""}>${esc(manager.name)}</option>`)
+                  .join("")}
+              </select>
+              <button class="btn secondary" type="submit">Save</button>
+            </form>
+          `,
+        )
+        .join("")}
+    </div>
   `;
 }
 
@@ -1106,6 +1213,10 @@ async function handleSubmit(event) {
       await api(`/api/admin/windows/${form.dataset.phase}`, { method: "PATCH", body: JSON.stringify(payload) });
       showToast("Cycle window updated");
     }
+    if (kind === "org-user") {
+      await api(`/api/admin/users/${form.dataset.userId}`, { method: "PATCH", body: JSON.stringify(payload) });
+      showToast("Organization profile updated");
+    }
     await refresh();
   } catch (error) {
     showToast(error.message);
@@ -1197,16 +1308,17 @@ async function handleClick(event) {
       await refresh();
     }
     if (action.dataset.action === "export-report") {
-      const response = await fetch("/api/reports/achievement.csv", { headers: { Authorization: `Bearer ${token}` } });
+      const format = action.dataset.format || "csv";
+      const response = await fetch(`/api/reports/achievement.${format}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) throw new Error("Could not export report");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "achievement-report.csv";
+      link.download = `achievement-report.${format}`;
       link.click();
       URL.revokeObjectURL(url);
-      showToast("Achievement report downloaded");
+      showToast(`Achievement ${format.toUpperCase()} downloaded`);
     }
     if (action.dataset.action === "demo-mode") {
       await api("/api/admin/demo-mode", { method: "POST", body: JSON.stringify({ today: new Date().toISOString().slice(0, 10) }) });

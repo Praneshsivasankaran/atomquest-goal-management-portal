@@ -6,8 +6,10 @@ import io
 import json
 import sqlite3
 import threading
+import zipfile
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape as xml_escape
 
 from app.business import (
     DomainError,
@@ -448,6 +450,53 @@ class Store:
             self.get_sheet_for_user(user["id"])
         self.audit(user["id"], "user", user["id"], "signed_up", None, user, "Self-service signup")
         return user
+
+    def update_user(self, actor_id: int, user_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        before = self.fetchone("SELECT * FROM users WHERE id=?", (user_id,))
+        if not before:
+            raise DomainError("User not found", 404)
+
+        allowed = {"name", "role", "title", "department", "manager_id"}
+        patch = {key: payload[key] for key in payload if key in allowed}
+        if not patch:
+            raise DomainError("No supported user fields were provided")
+
+        if "name" in patch:
+            patch["name"] = str(patch["name"]).strip()
+            if not patch["name"]:
+                raise DomainError("Name is required")
+        if "role" in patch:
+            patch["role"] = str(patch["role"]).strip().lower()
+            if patch["role"] not in ROLES:
+                raise DomainError("Choose a valid role")
+        if "department" in patch:
+            patch["department"] = str(patch["department"]).strip() or before["department"]
+        if "title" in patch:
+            patch["title"] = str(patch["title"]).strip() or before["title"]
+
+        effective_role = patch.get("role", before["role"])
+        if effective_role == "employee":
+            manager_id = patch.get("manager_id", before["manager_id"])
+            if manager_id in ("", None):
+                manager = self.fetchone("SELECT id FROM users WHERE role='manager' AND id<>? ORDER BY id LIMIT 1", (user_id,))
+                manager_id = manager["id"] if manager else None
+            if manager_id is not None:
+                manager = self.fetchone("SELECT id FROM users WHERE id=? AND role='manager'", (int(manager_id),))
+                if not manager:
+                    raise DomainError("Employees must be assigned to a valid manager")
+                patch["manager_id"] = int(manager_id)
+        else:
+            patch["manager_id"] = None
+
+        assignments = ", ".join([f"{key}=?" for key in patch])
+        params = [patch[key] for key in patch] + [user_id]
+        self.execute(f"UPDATE users SET {assignments} WHERE id=?", tuple(params))
+
+        after = self.get_user(user_id)
+        if after["role"] == "employee":
+            self.get_sheet_for_user(after["id"])
+        self.audit(actor_id, "user", user_id, "org_profile_updated", self.user_public(before), after, "Admin updated org hierarchy")
+        return after
 
     def get_user(self, user_id: int) -> dict[str, Any]:
         user = self.fetchone("SELECT * FROM users WHERE id=?", (user_id,))
@@ -1045,6 +1094,7 @@ class Store:
             "metrics": self.dashboard_metrics(),
             "employees": self.fetchall("SELECT id,name,email,role,title,department,manager_id FROM users WHERE role='employee' ORDER BY name"),
             "managers": self.fetchall("SELECT id,name,email,role,title,department FROM users WHERE role='manager' ORDER BY name"),
+            "org_users": self.fetchall("SELECT id,name,email,role,title,department,manager_id FROM users ORDER BY role, name"),
             "shared_goals": self.fetchall("SELECT * FROM shared_goals ORDER BY id DESC"),
             "notifications": self.notification_preview(user["role"]),
         }
@@ -1081,8 +1131,8 @@ class Store:
             """
         )
 
-    def achievement_csv(self) -> str:
-        rows = self.fetchall(
+    def achievement_rows(self) -> list[dict[str, Any]]:
+        return self.fetchall(
             """
             SELECT
               u.name AS employee,
@@ -1104,6 +1154,9 @@ class Store:
             ORDER BY u.name, g.id, p.quarter
             """
         )
+
+    def achievement_csv(self) -> str:
+        rows = self.achievement_rows()
         out = io.StringIO()
         writer = csv.DictWriter(out, fieldnames=[
             "employee", "department", "title", "uom_type", "weightage", "target_value",
@@ -1112,3 +1165,63 @@ class Store:
         writer.writeheader()
         writer.writerows(rows)
         return out.getvalue()
+
+    def achievement_xlsx(self) -> bytes:
+        headers = [
+            "employee", "department", "title", "uom_type", "weightage", "target_value",
+            "target_date", "quarter", "actual_value", "completion_date", "status", "score"
+        ]
+        rows = [headers] + [[row.get(header, "") for header in headers] for row in self.achievement_rows()]
+
+        def cell_ref(row_index: int, col_index: int) -> str:
+            name = ""
+            col = col_index
+            while col:
+                col, rem = divmod(col - 1, 26)
+                name = chr(65 + rem) + name
+            return f"{name}{row_index}"
+
+        row_xml = []
+        for row_index, row in enumerate(rows, 1):
+            cells = []
+            for col_index, value in enumerate(row, 1):
+                ref = cell_ref(row_index, col_index)
+                if isinstance(value, (int, float)) and value != "":
+                    cells.append(f'<c r="{ref}"><v>{value}</v></c>')
+                else:
+                    cells.append(f'<c r="{ref}" t="inlineStr"><is><t>{xml_escape(str(value or ""))}</t></is></c>')
+            row_xml.append(f'<row r="{row_index}">{"".join(cells)}</row>')
+
+        sheet_xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+  <sheetData>{"".join(row_xml)}</sheetData>
+</worksheet>"""
+        workbook_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Achievement Report" sheetId="1" r:id="rId1"/></sheets>
+</workbook>"""
+        workbook_rels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>"""
+        rels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"""
+        content_types = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>"""
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("[Content_Types].xml", content_types)
+            archive.writestr("_rels/.rels", rels)
+            archive.writestr("xl/workbook.xml", workbook_xml)
+            archive.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
+            archive.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+        return buffer.getvalue()

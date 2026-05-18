@@ -758,6 +758,41 @@ td small {
   background: linear-gradient(180deg, #155eef, #0f8a5f);
 }
 
+.org-directory {
+  display: grid;
+  gap: 10px;
+}
+
+.org-header,
+.org-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.1fr) 150px 190px 190px 96px;
+  gap: 10px;
+  align-items: center;
+}
+
+.org-header {
+  padding: 0 4px;
+  color: #48546a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.org-row {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcff;
+}
+
+.org-row small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+}
+
 .toast {
   position: fixed;
   right: 18px;
@@ -836,5 +871,13 @@ td small {
 
   .panel {
     padding: 16px;
+  }
+
+  .org-header {
+    display: none;
+  }
+
+  .org-row {
+    grid-template-columns: 1fr;
   }
 }
