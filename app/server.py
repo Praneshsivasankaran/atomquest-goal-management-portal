@@ -126,17 +126,18 @@ class ApiServer(BaseHTTPRequestHandler):
             self.send_json({"error": "Something went wrong"}, 500)
 
     def _assert_origin_allowed(self) -> None:
-        """Reject state-changing API calls from unexpected origins.
+        """Reject state-changing API calls from an unexpected origin.
 
-        Why: tokens travel in the Authorization header, so a logged-in user visiting
-        a malicious page would otherwise have their browser attach the token to
-        cross-origin POSTs. Comparing Origin (or Referer fallback) blocks that.
+        Bearer tokens ride in the Authorization header, so a logged-in user
+        visiting an attacker page would otherwise have their browser attach the
+        token to cross-origin POSTs. Comparing Origin (or falling back to
+        Referer) closes that hole.
         """
         origin = (self.headers.get("Origin") or "").rstrip("/")
         if not origin:
             referer = (self.headers.get("Referer") or "").rstrip("/")
             if not referer:
-                return  # same-origin tools (curl, mobile) don't send Origin/Referer
+                return  # non-browser clients (curl, server-to-server) omit both
             parsed = urlparse(referer)
             origin = f"{parsed.scheme}://{parsed.netloc}"
         if origin not in ALLOWED_ORIGINS:

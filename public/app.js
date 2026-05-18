@@ -329,7 +329,7 @@ function renderLogin() {
                     <input name="password" type="password" value="demo123" required autocomplete="current-password" />
                   </div>
                   <button class="btn auth-submit" type="submit">Enter Portal</button>
-                  <p class="auth-footnote">Tip: use the role cards above for a fast judge demo, or create a fresh account from Sign up.</p>
+                  <p class="auth-footnote">Use a demo profile above for a quick tour, or create a fresh account from Sign up.</p>
                 </form>
               `
           }
@@ -1253,7 +1253,7 @@ function renderAdmin() {
     <section class="grid-two" id="cycle">
       <div class="panel">
         <h2>Cycle Windows</h2>
-        <p>Adjust windows when you need to demo quarterly capture during the hackathon.</p>
+        <p>Adjust open and close dates for the goal-setting and quarterly check-in windows.</p>
         ${state.cycle.windows.map(renderWindowForm).join("")}
       </div>
       <div class="panel" id="shared">

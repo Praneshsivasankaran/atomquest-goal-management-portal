@@ -17,11 +17,10 @@ SECRET = os.getenv("APP_SECRET", DEMO_SECRET)
 
 
 def assert_secret_is_safe(host: str | None = None) -> None:
-    """Raise at startup if APP_SECRET is missing while the host is not localhost.
+    """Raise on startup if APP_SECRET is unset while the host is publicly bound.
 
-    Why: Render/Railway deployments without APP_SECRET set would sign tokens with a
-    public default string. Failing fast protects against an attacker who knows the
-    default forging admin tokens. Localhost demos still work without configuration.
+    The demo default is acceptable on localhost; on any other interface the
+    server must use a configured secret so tokens cannot be forged.
     """
     if SECRET != DEMO_SECRET:
         return

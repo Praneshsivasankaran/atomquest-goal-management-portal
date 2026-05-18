@@ -243,11 +243,11 @@ class Store:
         self.assert_demo_integrity()
 
     def assert_demo_integrity(self) -> None:
-        """Fail loudly if the demo dataset can't power a judge walkthrough.
+        """Fail loudly if the demo dataset is missing or partial.
 
-        Why: judges who load the app and see an empty admin dashboard assume the
-        whole portal is broken. Better to crash on startup with a clear message
-        so the operator runs `python app/server.py --seed-only` before showtime.
+        An empty admin dashboard reads as a broken application. Crashing on
+        startup with a clear message lets the operator run
+        ``python app/server.py --seed-only`` before serving traffic.
         """
         cycle = self.fetchone("SELECT id FROM cycles WHERE status='active' LIMIT 1")
         if not cycle:

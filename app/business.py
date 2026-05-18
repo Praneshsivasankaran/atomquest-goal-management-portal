@@ -35,10 +35,11 @@ def utc_now() -> str:
 
 
 def cycle_today(tz_name: str | None = None) -> date:
-    """Return today's date in the cycle's configured timezone (default Asia/Kolkata).
+    """Return today's date in the cycle's configured timezone.
 
-    Why: cycles are stamped with a timezone but `date.today()` returns the *server's*
-    local date. On a UTC-hosted Render box this is off by up to 5.5h around boundaries.
+    Cycle windows are stamped with a timezone (default Asia/Kolkata). Using
+    ``date.today()`` directly would pick up the server's local date instead,
+    which can be off by several hours on a UTC host around boundaries.
     """
     name = tz_name or DEFAULT_CYCLE_TZ
     if ZoneInfo is None:

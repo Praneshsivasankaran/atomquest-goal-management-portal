@@ -1,8 +1,8 @@
 # AtomQuest Goal Management Portal
 
-In-house employee goal setting and tracking portal built for the AtomQuest 1.0 hackathon.
+An in-house employee goal setting and tracking portal for the full appraisal lifecycle: goal creation, manager approval, quarterly check-ins, shared KPIs, escalations, analytics, and audit-ready governance.
 
-Phase 1 (goal creation and approval) and Phase 2 (quarterly check-ins) are end-to-end functional, plus every bonus track from the BRD (analytics, escalation monitor, Teams/Email payload mockups, Entra-ready auth seam, shared goals, audit trail).
+Built for the AtomQuest 1.0 BRD. Phase 1 (goal creation and approval) and Phase 2 (quarterly check-ins) are end-to-end functional, with every Section 5 bonus track delivered: analytics with completion heatmap, escalation monitor, Microsoft Teams + Outlook notification mockups, Entra-ready auth seam, shared goals, and a complete audit trail.
 
 ## Live Demo
 
@@ -104,11 +104,13 @@ tests/
   test_frontend_static.py  Static frontend assertions
 docs/
   architecture.md
+  architecture.png
   demo-script.md
   deployment.md
   submission-checklist.md
-  supervisor-review.md
 render.yaml
 Procfile
+requirements.txt
+runtime.txt
 .env.example
 ```
