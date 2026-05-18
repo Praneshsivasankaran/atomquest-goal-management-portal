@@ -241,7 +241,7 @@ function renderApp() {
               <div class="avatar">${esc(initials(user.name))}</div>
               <div>
                 <strong>${esc(user.name)}</strong>
-                <span>${esc(titleCase(user.role))} · ${esc(user.department || "Org")}</span>
+                <span>${esc(titleCase(user.role))} &middot; ${esc(user.department || "Org")}</span>
               </div>
             </div>
             <button class="btn secondary" data-action="logout">Log out</button>
@@ -449,7 +449,7 @@ function sheetValidation(sheet) {
 
 function renderValidation(sheet) {
   const check = sheetValidation(sheet);
-  const item = (ok, text) => `<div class="validation-item ${ok ? "ok" : "bad"}"><strong>${ok ? "✓" : "!"}</strong><span>${text}</span></div>`;
+  const item = (ok, text) => `<div class="validation-item ${ok ? "ok" : "bad"}"><strong>${ok ? "OK" : "!"}</strong><span>${text}</span></div>`;
   return `
     <div class="validation-list">
       ${item(check.totalOk, `Total weightage is ${check.total}%; it must be exactly 100%.`)}
@@ -460,28 +460,111 @@ function renderValidation(sheet) {
   `;
 }
 
+function renderWorkspaceHero({ eyebrow, title, subtitle, actions = "", meta = "" }) {
+  return `
+    <section class="workspace-hero">
+      <div>
+        <span class="eyebrow">${esc(eyebrow)}</span>
+        <h1>${esc(title)}</h1>
+        <p>${esc(subtitle)}</p>
+        ${meta ? `<div class="hero-meta">${meta}</div>` : ""}
+      </div>
+      <div class="hero-actions">${actions}</div>
+    </section>
+  `;
+}
+
+function renderSectionNav(items) {
+  return `
+    <nav class="section-nav" aria-label="Dashboard sections">
+      ${items.map((item) => `<a href="#${esc(item.href)}">${esc(item.label)}</a>`).join("")}
+    </nav>
+  `;
+}
+
+function renderQuickActions(items) {
+  return `
+    <section class="quick-actions">
+      ${items
+        .map(
+          (item) => `
+            <a class="quick-action" href="#${esc(item.href)}">
+              <span>${esc(item.kicker)}</span>
+              <strong>${esc(item.title)}</strong>
+              <em>${esc(item.body)}</em>
+            </a>
+          `,
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function renderWorkflowRail(currentState) {
+  const steps = [
+    ["draft", "Draft goals"],
+    ["submitted", "Manager review"],
+    ["locked", "Locked sheet"],
+    ["progress", "Quarterly updates"],
+  ];
+  const normalized = currentState === "returned" || currentState === "unlocked" ? "draft" : currentState;
+  const activeIndex = Math.max(0, steps.findIndex(([key]) => key === normalized));
+  return `
+    <div class="workflow-rail">
+      ${steps
+        .map(
+          ([, label], index) => `
+            <div class="workflow-step ${index <= activeIndex ? "done" : ""} ${index === activeIndex ? "active" : ""}">
+              <span>${index + 1}</span>
+              <strong>${esc(label)}</strong>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderEmployee() {
   const sheet = state.my_sheet;
   const editable = ["draft", "returned", "unlocked"].includes(sheet.state);
   const lockedEnough = ["locked", "unlocked"].includes(sheet.state);
   return `
-    <section class="hero-row">
-      <div class="panel">
-        <h2>My Goal Sheet</h2>
-        <p>${esc(sheet.employee_name)}, your current sheet is <span class="status ${esc(sheet.state)}">${esc(titleCase(sheet.state))}</span>.</p>
+    ${renderWorkspaceHero({
+      eyebrow: "Employee workspace",
+      title: "Build a clean, approval-ready goal sheet",
+      subtitle: "Create measurable goals, keep weightage balanced, and move smoothly into quarterly achievement tracking.",
+      actions: `
+        <button class="btn" data-action="submit-sheet" ${editable ? "" : "disabled"}>Submit for Approval</button>
+        <a class="btn secondary" href="#progress">Quarterly Updates</a>
+      `,
+      meta: `<span class="status ${esc(sheet.state)}">${esc(titleCase(sheet.state))}</span><span>${esc(sheet.employee_name)}</span><span>${sheet.goals.length}/8 goals</span>`,
+    })}
+    ${renderSectionNav([
+      { href: "overview", label: "Overview" },
+      { href: "goals", label: "Goals" },
+      { href: "progress", label: "Progress" },
+      { href: "analytics", label: "Analytics" },
+    ])}
+    ${renderQuickActions([
+      { href: "goals", kicker: "Next", title: "Balance goal weightage", body: "Hit exactly 100% before submission." },
+      { href: "assistant", kicker: "Assist", title: "Use smart suggestions", body: "Draft relevant goals faster." },
+      { href: "progress", kicker: "Later", title: "Update achievement", body: "Capture actuals during open windows." },
+    ])}
+    <section class="hero-row" id="overview">
+      <div class="panel panel-accent">
+        <h2>Goal Sheet Health</h2>
+        <p>Your current sheet is <span class="status ${esc(sheet.state)}">${esc(titleCase(sheet.state))}</span>.</p>
         ${sheet.manager_comment ? `<p class="section-note"><strong>Manager note:</strong> ${esc(sheet.manager_comment)}</p>` : ""}
+        ${renderWorkflowRail(sheet.state)}
         ${renderValidation(sheet)}
-        <div class="actions" style="margin-top:16px">
-          <button class="btn" data-action="submit-sheet" ${editable ? "" : "disabled"}>Submit for Approval</button>
-          <span class="section-note">Goals lock after manager approval.</span>
-        </div>
       </div>
       ${renderCyclePanel()}
     </section>
     ${renderMetrics()}
-    ${renderAnalyticsPanel()}
+    <div id="analytics">${renderAnalyticsPanel()}</div>
     ${renderNotifications()}
-    <section class="grid-two">
+    <section class="grid-two" id="goals">
       <div class="panel">
         <h2>Add Goal</h2>
         <p>Use measurable targets and keep the full sheet at exactly 100% weightage.</p>
@@ -493,7 +576,7 @@ function renderEmployee() {
         ${sheet.goals.length ? sheet.goals.map((goal) => renderGoalCard(goal, editable)).join("") : `<div class="empty">No goals added yet.</div>`}
       </div>
     </section>
-    <section class="panel" style="margin-top:18px">
+    <section class="panel" style="margin-top:18px" id="progress">
       <h2>Quarterly Achievement Updates</h2>
       <p>Progress capture is allowed only during the configured quarterly window.</p>
       ${lockedEnough ? sheet.goals.map(renderProgressCard).join("") : `<div class="empty">Progress opens after manager approval locks the goal sheet.</div>`}
@@ -503,7 +586,7 @@ function renderEmployee() {
 
 function renderSmartGoalAssistant() {
   return `
-    <div class="goal-card">
+    <div class="goal-card" id="assistant">
       <div class="goal-head">
         <div>
           <h3>Smart Goal Assistant</h3>
@@ -638,7 +721,7 @@ function renderProgressCard(goal) {
       <div class="goal-head">
         <div>
           <h3>${esc(goal.title)}</h3>
-          <p>Target: ${esc(targetText(goal))} · Weightage ${Number(goal.weightage)}%</p>
+          <p>Target: ${esc(targetText(goal))} &middot; Weightage ${Number(goal.weightage)}%</p>
         </div>
         ${shared ? `<span class="chip">Linked progress</span>` : ""}
       </div>
@@ -710,28 +793,48 @@ function renderManager() {
   const approvals = state.approvals || [];
   const team = state.team_sheets || [];
   return `
+    ${renderWorkspaceHero({
+      eyebrow: "Manager workspace",
+      title: "Review goals, coach progress, and keep check-ins moving",
+      subtitle: "A focused team command center for submitted goal sheets, planned-vs-actual progress, and structured feedback.",
+      actions: `
+        <button class="btn secondary" data-action="export-report" data-format="csv">Export CSV</button>
+        <button class="btn" data-action="export-report" data-format="xlsx">Export Excel</button>
+      `,
+      meta: `<span class="status submitted">${approvals.length} Pending Approvals</span><span>${team.length} team sheets</span>`,
+    })}
+    ${renderSectionNav([
+      { href: "approvals", label: "Approvals" },
+      { href: "checkins", label: "Check-ins" },
+      { href: "reports", label: "Reports" },
+      { href: "analytics", label: "Analytics" },
+    ])}
+    ${renderQuickActions([
+      { href: "approvals", kicker: "Review", title: "Clear approval queue", body: "Edit targets inline and lock final sheets." },
+      { href: "checkins", kicker: "Coach", title: "Record check-ins", body: "Capture discussion notes per quarter." },
+      { href: "reports", kicker: "Export", title: "Download reports", body: "Use CSV or Excel for appraisal prep." },
+    ])}
     <section class="hero-row">
-      <div class="panel">
-        <h2>Manager Workspace</h2>
-        <p>Review submitted goals, tune targets or weightage, approve clean sheets, and document quarterly check-ins.</p>
-        <div class="actions">
-          <span class="status submitted">${approvals.length} Pending Approvals</span>
-          <button class="btn secondary" data-action="export-report" data-format="csv">Export CSV</button>
-          <button class="btn secondary" data-action="export-report" data-format="xlsx">Export Excel</button>
+      <div class="panel panel-accent">
+        <h2>Team Review Snapshot</h2>
+        <p>Approval and check-in work are grouped below so the demo feels like a real manager console.</p>
+        <div class="demo-readiness">
+          <div class="readiness-item"><span class="status submitted">${approvals.length}</span><div><strong>Pending reviews</strong><span>Goal sheets waiting for your decision.</span></div></div>
+          <div class="readiness-item"><span class="status locked">${team.length}</span><div><strong>Team members</strong><span>Employees mapped to this manager.</span></div></div>
         </div>
       </div>
       ${renderCyclePanel()}
     </section>
     ${renderMetrics()}
-    ${renderAnalyticsPanel()}
-    ${renderReportCenter()}
+    <div id="analytics">${renderAnalyticsPanel()}</div>
+    <div id="reports">${renderReportCenter()}</div>
     ${renderNotifications()}
-    <section class="panel">
+    <section class="panel" id="approvals">
       <h2>Approval Queue</h2>
       <p>Inline edits are available only while a sheet is submitted for review.</p>
       ${approvals.length ? approvals.map(renderApprovalSheet).join("") : `<div class="empty">No submitted sheets waiting for review.</div>`}
     </section>
-    <section class="panel" style="margin-top:18px">
+    <section class="panel" style="margin-top:18px" id="checkins">
       <h2>Team Check-ins</h2>
       <p>Track planned vs actual and leave structured manager feedback.</p>
       ${team.length ? team.map(renderTeamSheet).join("") : `<div class="empty">No team members assigned.</div>`}
@@ -745,7 +848,7 @@ function renderApprovalSheet(sheet) {
       <div class="goal-head">
         <div>
           <h3>${esc(sheet.employee_name)}</h3>
-          <p>${esc(sheet.department)} · ${sheet.goals.length} goals · <span class="status ${esc(sheet.state)}">${esc(titleCase(sheet.state))}</span></p>
+          <p>${esc(sheet.department)} &middot; ${sheet.goals.length} goals &middot; <span class="status ${esc(sheet.state)}">${esc(titleCase(sheet.state))}</span></p>
         </div>
         <div class="actions">
           <button class="btn" data-action="approve-sheet" data-sheet-id="${sheet.id}">Approve & Lock</button>
@@ -790,7 +893,7 @@ function renderTeamSheet(sheet) {
       <div class="goal-head">
         <div>
           <h3>${esc(sheet.employee_name)}</h3>
-          <p>${esc(sheet.employee_email)} · <span class="status ${esc(sheet.state)}">${esc(titleCase(sheet.state))}</span></p>
+          <p>${esc(sheet.employee_email)} &middot; <span class="status ${esc(sheet.state)}">${esc(titleCase(sheet.state))}</span></p>
         </div>
       </div>
       <div class="table-wrap">
@@ -833,51 +936,72 @@ function renderTeamSheet(sheet) {
 
 function renderAdmin() {
   return `
+    ${renderWorkspaceHero({
+      eyebrow: "Admin / HR control center",
+      title: "Run the full goal cycle from one governed workspace",
+      subtitle: "Configure windows, manage hierarchy, push shared KPIs, handle exceptions, monitor escalations, and export appraisal-ready reports.",
+      actions: `
+        <button class="btn" data-action="export-report" data-format="xlsx">Export Excel</button>
+        <button class="btn secondary" data-action="export-report" data-format="csv">Export CSV</button>
+        <button class="btn secondary" data-action="demo-mode">Open Demo Windows</button>
+      `,
+      meta: `<span class="status locked">${state.metrics.completion_rate}% Complete</span><span>${(state.org_users || []).length} users</span><span>${(state.shared_goals || []).length} shared KPIs</span>`,
+    })}
+    ${renderSectionNav([
+      { href: "cycle", label: "Cycle" },
+      { href: "org", label: "Org" },
+      { href: "shared", label: "Shared Goals" },
+      { href: "reports", label: "Reports" },
+      { href: "audit", label: "Audit" },
+    ])}
+    ${renderQuickActions([
+      { href: "cycle", kicker: "Setup", title: "Open active windows", body: "Make quarterly capture demo-ready." },
+      { href: "org", kicker: "Govern", title: "Manage hierarchy", body: "Map people to managers and departments." },
+      { href: "audit", kicker: "Control", title: "Inspect audit trail", body: "Show who changed what and when." },
+    ])}
     <section class="hero-row">
-      <div class="panel">
-        <h2>Admin / HR Control Center</h2>
-        <p>Configure cycles, push shared KPIs, unlock exceptions, export reports, and inspect the audit trail.</p>
-        <div class="actions">
-          <button class="btn" data-action="export-report" data-format="xlsx">Export Excel</button>
-          <button class="btn secondary" data-action="export-report" data-format="csv">Export CSV</button>
-          <button class="btn secondary" data-action="demo-mode">Open Demo Windows</button>
-          <span class="status locked">${state.metrics.completion_rate}% Complete</span>
+      <div class="panel panel-accent">
+        <h2>HR Operating Snapshot</h2>
+        <p>Everything HR needs for cycle readiness, exception handling, and submission governance is available below.</p>
+        <div class="demo-readiness">
+          <div class="readiness-item"><span class="status locked">${state.metrics.locked_sheets}</span><div><strong>Locked sheets</strong><span>Approved sheets ready for tracking.</span></div></div>
+          <div class="readiness-item"><span class="status submitted">${state.metrics.submitted_sheets}</span><div><strong>Pending approval</strong><span>Manager actions still open.</span></div></div>
         </div>
       </div>
       ${renderCyclePanel()}
     </section>
     ${renderMetrics()}
-    ${renderAnalyticsPanel()}
-    ${renderReportCenter()}
+    <div id="analytics">${renderAnalyticsPanel()}</div>
+    <div id="reports">${renderReportCenter()}</div>
     ${renderNotifications()}
-    <section class="grid-two">
+    <section class="grid-two" id="cycle">
       <div class="panel">
         <h2>Cycle Windows</h2>
         <p>Adjust windows when you need to demo quarterly capture during the hackathon.</p>
         ${state.cycle.windows.map(renderWindowForm).join("")}
       </div>
-      <div class="panel">
+      <div class="panel" id="shared">
         <h2>Create Shared Goal</h2>
         <p>Title and target stay read-only for recipients; only weightage is editable.</p>
         ${renderSharedGoalForm()}
       </div>
     </section>
-    <section class="panel" style="margin-top:18px">
+    <section class="panel" style="margin-top:18px" id="org">
       <h2>Organization Hierarchy</h2>
       <p>Manage roles, departments, titles, and manager mapping from one HR console.</p>
       ${renderOrgDirectory()}
     </section>
-    <section class="panel" style="margin-top:18px">
+    <section class="panel" style="margin-top:18px" id="exceptions">
       <h2>Goal Sheet Exceptions</h2>
       <p>Admin unlocks are logged with reason and timestamp.</p>
       ${renderAdminSheets()}
     </section>
-    <section class="panel" style="margin-top:18px">
+    <section class="panel" style="margin-top:18px" id="escalations">
       <h2>Escalation Monitor</h2>
       <p>Rule-based escalation events are visible to HR for follow-up.</p>
       ${renderEscalations()}
     </section>
-    <section class="panel" style="margin-top:18px">
+    <section class="panel" style="margin-top:18px" id="audit">
       <h2>Audit Trail</h2>
       <p>Every meaningful workflow change is stored for governance review.</p>
       ${renderAuditLog()}
@@ -1131,7 +1255,7 @@ function renderAuditLog() {
           </div>
           <div>
             <strong>${esc(titleCase(log.action))}</strong>
-            <small>${esc(log.entity_type)} #${esc(log.entity_id)} ${log.reason ? `· ${esc(log.reason)}` : ""}</small>
+            <small>${esc(log.entity_type)} #${esc(log.entity_id)} ${log.reason ? `&middot; ${esc(log.reason)}` : ""}</small>
           </div>
           <div><span class="chip">${esc(log.entity_type)}</span></div>
         </div>
