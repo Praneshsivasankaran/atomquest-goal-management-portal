@@ -555,6 +555,61 @@ td small {
   line-height: 1.5;
 }
 
+.demo-readiness {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.readiness-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 10px;
+  background: #fbfcff;
+  border: 1px solid var(--line);
+}
+
+.readiness-item strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.readiness-item span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 140px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcff;
+}
+
+.sparkline-col {
+  flex: 1;
+  display: grid;
+  align-items: end;
+  gap: 8px;
+  height: 100%;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sparkline-bar {
+  min-height: 6px;
+  border-radius: 7px 7px 3px 3px;
+  background: linear-gradient(180deg, #155eef, #0f8a5f);
+}
+
 .toast {
   position: fixed;
   right: 18px;
@@ -604,6 +659,7 @@ td small {
   .grid-three,
   .demo-grid,
   .notice-grid,
+  .demo-readiness,
   .form-grid {
     grid-template-columns: 1fr;
   }

@@ -25,7 +25,10 @@ The app covers the core problem statement:
 | Planned vs actual manager check-ins | Built |
 | CSV achievement report | Built |
 | Audit trail | Built |
-| Escalation rules model | Seeded foundation |
+| Smart goal suggestions | Built |
+| QoQ trends and manager effectiveness analytics | Built |
+| Escalation rules and event monitor | Built |
+| Demo mode for opening active windows | Built |
 | Microsoft Entra ID / Teams integration | Documented bonus path |
 
 ## Quick Start
@@ -72,7 +75,9 @@ git push -u origin main
 ## Demo Notes
 
 - The default date-based windows follow the problem statement.
-- For a live demo of quarterly progress capture, sign in as Admin and adjust the relevant quarter window to include today's date.
+- For a live demo of quarterly progress capture, sign in as Admin and use **Open Demo Windows**.
+- Use the top-bar role switcher to move between Employee, Manager, and Admin without logging out manually.
+- The Employee dashboard includes a Smart Goal Assistant that fills goal drafts from local, rule-based suggestions.
 - The app intentionally keeps setup cheap: no paid APIs, no build step, and no dependency install required for the local demo.
 
 ## Deployment

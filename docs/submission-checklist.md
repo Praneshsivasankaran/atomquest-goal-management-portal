@@ -11,7 +11,8 @@
 - Mention bonus foundations:
   - Shared goals
   - Audit trail
-  - Escalation rules model
+  - Smart goal suggestions
+  - QoQ trend and manager effectiveness analytics
+  - Escalation monitor
   - Teams/Email-ready notification design
   - Entra ID-ready auth boundary
-

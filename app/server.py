@@ -115,6 +115,10 @@ class ApiServer(BaseHTTPRequestHandler):
             self.end_headers()
             return self.wfile.write(csv_body.encode("utf-8"))
 
+        if method == "GET" and path == "/api/goals/suggestions":
+            user = self.require_role("employee")
+            return self.send_json({"suggestions": self.store.goal_suggestions(user["id"])})
+
         if method == "POST" and path == "/api/goals":
             user = self.require_role("employee")
             goal = self.store.create_goal(user["id"], user["id"], self.read_json())
@@ -170,6 +174,11 @@ class ApiServer(BaseHTTPRequestHandler):
         if method == "POST" and path == "/api/admin/shared-goals":
             user = self.require_role("admin")
             return self.send_json(self.store.create_shared_goal(user["id"], self.read_json()), 201)
+
+        if method == "POST" and path == "/api/admin/demo-mode":
+            user = self.require_role("admin")
+            windows = self.store.activate_demo_windows(user["id"], self.read_json().get("today", "2026-05-18"))
+            return self.send_json({"windows": windows})
 
         match = re.fullmatch(r"/api/admin/sheets/(\d+)/unlock", path)
         if match and method == "POST":

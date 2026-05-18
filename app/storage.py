@@ -232,6 +232,7 @@ class Store:
             (1, "Anita Rao", "employee@demo.com", password, "employee", "Sales Executive", "Sales", 2),
             (4, "Dev Menon", "employee2@demo.com", password, "employee", "Customer Success Associate", "Customer Success", 2),
             (5, "Sara Iyer", "employee3@demo.com", password, "employee", "Operations Analyst", "Operations", 2),
+            (6, "Leena Nair", "employee4@demo.com", password, "employee", "Product Analyst", "Product", 2),
         ]
         for user_id, name, email, pwd, role, title, department, manager_id in users:
             self.execute(
@@ -254,7 +255,7 @@ class Store:
                 (cycle_id, phase, label, opens, closes),
             )
 
-        for user_id in [1, 4, 5]:
+        for user_id in [1, 4, 5, 6]:
             self.execute("INSERT INTO goal_sheets (user_id, cycle_id, state) VALUES (?,?,?)", (user_id, cycle_id, "draft"))
 
         self.create_goal(1, 1, {
@@ -307,6 +308,68 @@ class Store:
         self.execute(
             "UPDATE goal_sheets SET state='submitted', submitted_at=? WHERE id=?",
             (utc_now(), sheet_dev["id"]),
+        )
+
+        sheet_leena = self.get_sheet_for_user(6)
+        self.create_goal(2, 6, {
+            "thrust_area": "Product Adoption",
+            "title": "Increase active feature adoption",
+            "description": "Lift adoption of the new analytics workspace for pilot customers.",
+            "uom_type": "percentage",
+            "direction": "min",
+            "target_value": 75,
+            "weightage": 50,
+        }, audit=False)
+        self.create_goal(2, 6, {
+            "thrust_area": "Delivery",
+            "title": "Launch quarterly insights pack",
+            "description": "Ship the executive insights pack before the quarterly review deadline.",
+            "uom_type": "timeline",
+            "direction": "timeline",
+            "target_date": "2026-06-25",
+            "weightage": 50,
+        }, audit=False)
+        now = utc_now()
+        self.execute(
+            "UPDATE goal_sheets SET state='locked', submitted_at=?, approved_at=?, locked_at=? WHERE id=?",
+            (now, now, now, sheet_leena["id"]),
+        )
+        self.execute("UPDATE goals SET locked=1 WHERE sheet_id=?", (sheet_leena["id"],))
+        leena_goals = self.sheet_goals(sheet_leena["id"])
+        self.execute(
+            """
+            INSERT INTO progress_updates (goal_id, quarter, actual_value, status, score, notes, created_by, updated_at)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,
+            (leena_goals[0]["id"], "q1", 55, "on_track", 73.33, "Pilot cohort is adopting steadily.", 6, now),
+        )
+        self.execute(
+            """
+            INSERT INTO progress_updates (goal_id, quarter, actual_value, status, score, notes, created_by, updated_at)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,
+            (leena_goals[0]["id"], "q2", 78, "completed", 100, "Adoption target crossed after enablement nudges.", 6, now),
+        )
+        self.execute(
+            """
+            INSERT INTO progress_updates (goal_id, quarter, completion_date, status, score, notes, created_by, updated_at)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,
+            (leena_goals[1]["id"], "q1", "2026-06-20", "completed", 100, "Insights pack launched ahead of deadline.", 6, now),
+        )
+        self.execute(
+            """
+            INSERT INTO checkins (sheet_id, manager_id, quarter, comment, created_at)
+            VALUES (?,?,?,?,?)
+            """,
+            (sheet_leena["id"], 2, "q1", "Strong ownership and a clean handoff to leadership.", now),
+        )
+        self.execute(
+            """
+            INSERT INTO checkins (sheet_id, manager_id, quarter, comment, created_at)
+            VALUES (?,?,?,?,?)
+            """,
+            (sheet_leena["id"], 2, "q2", "Great quarter; keep improving adoption evidence quality.", now),
         )
 
         self.execute(
@@ -747,6 +810,14 @@ class Store:
         submitted = sum(1 for sheet in sheets if sheet["state"] == "submitted")
         draft = sum(1 for sheet in sheets if sheet["state"] in {"draft", "returned", "unlocked"})
         checkins = self.fetchall("SELECT quarter, COUNT(*) AS count FROM checkins GROUP BY quarter")
+        quarter_trends = self.fetchall(
+            """
+            SELECT quarter AS label, ROUND(AVG(score), 1) AS score
+            FROM progress_updates
+            GROUP BY quarter
+            ORDER BY quarter
+            """
+        )
         uom_distribution = self.fetchall("SELECT uom_type AS label, COUNT(*) AS count FROM goals GROUP BY uom_type ORDER BY count DESC")
         department_completion = self.fetchall(
             """
@@ -782,10 +853,118 @@ class Store:
             "draft_sheets": draft,
             "completion_rate": round((locked / total) * 100, 1) if total else 0,
             "checkins": checkins,
+            "quarter_trends": quarter_trends,
             "uom_distribution": uom_distribution,
             "department_completion": department_completion,
             "manager_effectiveness": manager_effectiveness,
         }
+
+    def goal_suggestions(self, user_id: int) -> list[dict[str, Any]]:
+        user = self.get_user(user_id)
+        sheet = self.get_sheet_for_user(user_id)
+        existing = self.sheet_goals(sheet["id"])
+        used_weight = sum(float(goal["weightage"] or 0) for goal in existing)
+        remaining = max(10, min(40, 100 - used_weight)) if used_weight < 100 else 10
+
+        library = {
+            "Sales": [
+                {
+                    "thrust_area": "Revenue Growth",
+                    "title": "Improve qualified pipeline conversion",
+                    "description": "Increase the share of qualified opportunities that move to proposal stage.",
+                    "uom_type": "percentage",
+                    "direction": "min",
+                    "target_value": 35,
+                },
+                {
+                    "thrust_area": "Customer Quality",
+                    "title": "Reduce proposal turnaround time",
+                    "description": "Shorten average proposal turnaround while keeping approval quality intact.",
+                    "uom_type": "numeric",
+                    "direction": "max",
+                    "target_value": 3,
+                },
+            ],
+            "Customer Success": [
+                {
+                    "thrust_area": "Retention",
+                    "title": "Increase renewal readiness coverage",
+                    "description": "Complete renewal readiness reviews for priority accounts before the quarter closes.",
+                    "uom_type": "percentage",
+                    "direction": "min",
+                    "target_value": 95,
+                },
+                {
+                    "thrust_area": "Customer Experience",
+                    "title": "Lower unresolved support backlog",
+                    "description": "Keep unresolved support backlog below the agreed weekly threshold.",
+                    "uom_type": "numeric",
+                    "direction": "max",
+                    "target_value": 12,
+                },
+            ],
+            "Operations": [
+                {
+                    "thrust_area": "Safety",
+                    "title": "Maintain zero preventable incidents",
+                    "description": "Keep preventable operational incidents at zero through weekly control checks.",
+                    "uom_type": "zero",
+                    "direction": "zero",
+                    "target_value": 0,
+                },
+                {
+                    "thrust_area": "Process",
+                    "title": "Close monthly process audit actions",
+                    "description": "Complete all assigned process audit actions before month-end review.",
+                    "uom_type": "percentage",
+                    "direction": "min",
+                    "target_value": 100,
+                },
+            ],
+            "Product": [
+                {
+                    "thrust_area": "Product Adoption",
+                    "title": "Increase analytics feature adoption",
+                    "description": "Drive adoption of analytics features across the active pilot customer base.",
+                    "uom_type": "percentage",
+                    "direction": "min",
+                    "target_value": 80,
+                },
+                {
+                    "thrust_area": "Delivery",
+                    "title": "Ship roadmap discovery pack on time",
+                    "description": "Complete discovery notes and prioritization pack before the quarterly planning date.",
+                    "uom_type": "timeline",
+                    "direction": "timeline",
+                    "target_date": "2026-06-28",
+                },
+            ],
+        }
+        fallback = [
+            {
+                "thrust_area": "Execution",
+                "title": "Complete priority quarterly deliverables",
+                "description": "Finish the agreed priority deliverables for the active goal cycle.",
+                "uom_type": "percentage",
+                "direction": "min",
+                "target_value": 100,
+            }
+        ]
+        suggestions = library.get(user.get("department"), fallback)
+        return [{**item, "weightage": remaining, "fit_reason": f"Suggested for {user.get('department')} based on current sheet balance."} for item in suggestions]
+
+    def activate_demo_windows(self, actor_id: int, today: str) -> list[dict[str, Any]]:
+        before = self.active_cycle()["windows"]
+        opens = "2026-05-01" if today.startswith("2026-05") else today
+        closes = "2027-12-31"
+        cycle = self.active_cycle()
+        self.execute(
+            "UPDATE cycle_windows SET opens_on=?, closes_on=? WHERE cycle_id=?",
+            (opens, closes, cycle["id"]),
+        )
+        after = self.active_cycle()["windows"]
+        self.audit(actor_id, "cycle", cycle["id"], "demo_windows_activated", before, after, "Admin opened all windows for live demo")
+        return after
 
     def notification_preview(self, role: str) -> list[dict[str, Any]]:
         base = [

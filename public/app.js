@@ -228,6 +228,10 @@ function renderAnalyticsPanel() {
       <p>Quick charts for the areas judges usually ask about: completion, goal mix, and manager follow-through.</p>
       <div class="grid-three">
         <div>
+          <h3>QoQ Achievement Trend</h3>
+          ${renderTrend(metrics.quarter_trends || [])}
+        </div>
+        <div>
           <h3>Goal Distribution</h3>
           ${renderBarRows(metrics.uom_distribution || [])}
         </div>
@@ -235,12 +239,60 @@ function renderAnalyticsPanel() {
           <h3>Department Completion</h3>
           ${renderBarRows(metrics.department_completion || [], "completion")}
         </div>
+      </div>
+      <div class="grid-two" style="margin-top:16px">
         <div>
           <h3>Manager Effectiveness</h3>
           ${renderBarRows(metrics.manager_effectiveness || [], "manager")}
         </div>
+        ${renderDemoReadiness()}
       </div>
     </section>
+  `;
+}
+
+function renderTrend(items) {
+  if (!items?.length) return `<div class="empty">Quarterly scores appear after progress updates.</div>`;
+  return `
+    <div class="sparkline">
+      ${items
+        .map(
+          (item) => `
+            <div class="sparkline-col">
+              <div class="sparkline-bar" style="height:${Math.max(6, Math.min(Number(item.score || 0), 100))}%"></div>
+              <strong>${esc(String(item.score || 0))}%</strong>
+              <span>${esc(String(item.label || "").toUpperCase())}</span>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderDemoReadiness() {
+  const items = [
+    ["Employee Journey", "Create, validate, submit, and update achievement."],
+    ["Manager Journey", "Review, edit, approve, return, and check in."],
+    ["Admin Journey", "Cycle windows, shared goals, unlocks, audit, export."],
+    ["Bonus Story", "Analytics, escalation monitor, notifications, smart suggestions."],
+  ];
+  return `
+    <div>
+      <h3>Demo Readiness</h3>
+      <div class="demo-readiness">
+        ${items
+          .map(
+            ([title, body]) => `
+              <div class="readiness-item">
+                <span class="status locked">Ready</span>
+                <div><strong>${esc(title)}</strong><span>${esc(body)}</span></div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    </div>
   `;
 }
 
@@ -343,7 +395,7 @@ function renderEmployee() {
       <div class="panel">
         <h2>Add Goal</h2>
         <p>Use measurable targets and keep the full sheet at exactly 100% weightage.</p>
-        ${editable ? renderGoalForm() : `<div class="empty">This sheet is locked for goal edits.</div>`}
+        ${editable ? renderSmartGoalAssistant() + renderGoalForm() : `<div class="empty">This sheet is locked for goal edits.</div>`}
       </div>
       <div class="panel">
         <h2>Goals</h2>
@@ -356,6 +408,21 @@ function renderEmployee() {
       <p>Progress capture is allowed only during the configured quarterly window.</p>
       ${lockedEnough ? sheet.goals.map(renderProgressCard).join("") : `<div class="empty">Progress opens after manager approval locks the goal sheet.</div>`}
     </section>
+  `;
+}
+
+function renderSmartGoalAssistant() {
+  return `
+    <div class="goal-card">
+      <div class="goal-head">
+        <div>
+          <h3>Smart Goal Assistant</h3>
+          <p>Offline suggestions based on your role, department, and remaining weightage.</p>
+        </div>
+        <button class="btn secondary" data-action="load-suggestions">Suggest Goals</button>
+      </div>
+      <div id="suggestions-root" class="grid-two"></div>
+    </div>
   `;
 }
 
@@ -680,6 +747,7 @@ function renderAdmin() {
         <p>Configure cycles, push shared KPIs, unlock exceptions, export reports, and inspect the audit trail.</p>
         <div class="actions">
           <button class="btn" data-action="export-report">Export Achievement CSV</button>
+          <button class="btn secondary" data-action="demo-mode">Open Demo Windows</button>
           <span class="status locked">${state.metrics.completion_rate}% Complete</span>
         </div>
       </div>
@@ -978,6 +1046,36 @@ async function handleClick(event) {
       showToast("Goal deleted");
       await refresh();
     }
+    if (action.dataset.action === "load-suggestions") {
+      const result = await api("/api/goals/suggestions");
+      const root = document.querySelector("#suggestions-root");
+      root.innerHTML = result.suggestions
+        .map(
+          (goal) => `
+            <div class="notice">
+              <span class="chip">${esc(goal.thrust_area)}</span>
+              <strong>${esc(goal.title)}</strong>
+              <span>${esc(goal.fit_reason)}</span>
+              <div class="goal-meta">
+                <span class="chip">${esc(titleCase(goal.uom_type))}</span>
+                <span class="chip">${esc(goal.target_value ?? goal.target_date ?? "0")}</span>
+                <span class="chip">${esc(goal.weightage)}%</span>
+              </div>
+              <button class="btn secondary" style="margin-top:12px" data-action="use-suggestion" data-goal="${encodeURIComponent(JSON.stringify(goal))}">Use This</button>
+            </div>
+          `,
+        )
+        .join("");
+      showToast("Smart suggestions loaded");
+    }
+    if (action.dataset.action === "use-suggestion") {
+      const goal = JSON.parse(decodeURIComponent(action.dataset.goal));
+      const form = document.querySelector('[data-form="create-goal"]');
+      for (const [key, value] of Object.entries(goal)) {
+        if (form.elements[key]) form.elements[key].value = value ?? "";
+      }
+      showToast("Suggestion copied into the goal form");
+    }
     if (action.dataset.action === "approve-sheet") {
       await api(`/api/manager/sheets/${action.dataset.sheetId}/approve`, { method: "POST", body: JSON.stringify({}) });
       showToast("Goal sheet approved and locked");
@@ -1005,6 +1103,11 @@ async function handleClick(event) {
       link.click();
       URL.revokeObjectURL(url);
       showToast("Achievement report downloaded");
+    }
+    if (action.dataset.action === "demo-mode") {
+      await api("/api/admin/demo-mode", { method: "POST", body: JSON.stringify({ today: new Date().toISOString().slice(0, 10) }) });
+      showToast("All cycle windows are open for demo");
+      await refresh();
     }
   } catch (error) {
     showToast(error.message);

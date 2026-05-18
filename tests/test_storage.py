@@ -77,7 +77,30 @@ class StorageWorkflowTests(unittest.TestCase):
         self.assertIn("submitted", actions)
         self.assertIn("approved_and_locked", actions)
 
+    def test_goal_suggestions_use_employee_context(self) -> None:
+        store = self.make_store()
+
+        suggestions = store.goal_suggestions(1)
+
+        self.assertGreaterEqual(len(suggestions), 1)
+        self.assertEqual(suggestions[0]["thrust_area"], "Revenue Growth")
+        self.assertIn("fit_reason", suggestions[0])
+
+    def test_demo_mode_opens_all_cycle_windows(self) -> None:
+        store = self.make_store()
+
+        windows = store.activate_demo_windows(3, "2026-05-18")
+
+        self.assertTrue(all(window["opens_on"] <= "2026-05-18" for window in windows))
+        self.assertTrue(all(window["closes_on"] >= "2026-05-18" for window in windows))
+
+    def test_seeded_metrics_include_quarter_trends(self) -> None:
+        store = self.make_store()
+
+        metrics = store.dashboard_metrics()
+
+        self.assertGreaterEqual(len(metrics["quarter_trends"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
-
