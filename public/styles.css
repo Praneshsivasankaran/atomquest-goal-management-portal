@@ -267,6 +267,12 @@ select:focus {
   font-size: 13px;
 }
 
+.role-switch {
+  width: auto;
+  min-width: 170px;
+  background: #fbfcff;
+}
+
 .workspace {
   max-width: 1320px;
   margin: 0 auto;
@@ -508,6 +514,47 @@ td small {
   background: var(--brand);
 }
 
+.bar-list {
+  display: grid;
+  gap: 12px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.65fr) minmax(160px, 1fr) 58px;
+  gap: 12px;
+  align-items: center;
+}
+
+.bar-row strong,
+.bar-row span:last-child {
+  font-size: 13px;
+}
+
+.notice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.notice {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: #fbfcff;
+}
+
+.notice strong,
+.notice span {
+  display: block;
+}
+
+.notice span {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .toast {
   position: fixed;
   right: 18px;
@@ -556,6 +603,7 @@ td small {
   .metric-grid,
   .grid-three,
   .demo-grid,
+  .notice-grid,
   .form-grid {
     grid-template-columns: 1fr;
   }
@@ -584,4 +632,3 @@ td small {
     padding: 16px;
   }
 }
-

@@ -317,6 +317,20 @@ class Store:
             "INSERT INTO escalation_rules (name, condition_key, days_after, notify_role) VALUES (?,?,?,?)",
             ("Manager approval pending", "manager_approval_pending", 2, "admin"),
         )
+        self.execute(
+            """
+            INSERT INTO escalation_events (rule_id, user_id, sheet_id, status, message, created_at)
+            VALUES (?,?,?,?,?,?)
+            """,
+            (1, 5, 3, "open", "Sara Iyer has not submitted her goal sheet for the active cycle.", utc_now()),
+        )
+        self.execute(
+            """
+            INSERT INTO escalation_events (rule_id, user_id, sheet_id, status, message, created_at)
+            VALUES (?,?,?,?,?,?)
+            """,
+            (2, 4, 2, "open", "Dev Menon's submitted goal sheet is waiting for manager approval.", utc_now()),
+        )
 
     def user_public(self, user: dict[str, Any]) -> dict[str, Any]:
         return {key: user[key] for key in ["id", "name", "email", "role", "title", "department", "manager_id"] if key in user}
@@ -733,6 +747,34 @@ class Store:
         submitted = sum(1 for sheet in sheets if sheet["state"] == "submitted")
         draft = sum(1 for sheet in sheets if sheet["state"] in {"draft", "returned", "unlocked"})
         checkins = self.fetchall("SELECT quarter, COUNT(*) AS count FROM checkins GROUP BY quarter")
+        uom_distribution = self.fetchall("SELECT uom_type AS label, COUNT(*) AS count FROM goals GROUP BY uom_type ORDER BY count DESC")
+        department_completion = self.fetchall(
+            """
+            SELECT
+              u.department AS label,
+              COUNT(gs.id) AS total,
+              SUM(CASE WHEN gs.state='locked' THEN 1 ELSE 0 END) AS complete
+            FROM goal_sheets gs
+            JOIN users u ON u.id = gs.user_id
+            GROUP BY u.department
+            ORDER BY u.department
+            """
+        )
+        manager_effectiveness = self.fetchall(
+            """
+            SELECT
+              m.name AS label,
+              COUNT(DISTINCT gs.id) AS team_sheets,
+              COUNT(DISTINCT c.id) AS checkins
+            FROM users m
+            JOIN users e ON e.manager_id = m.id
+            LEFT JOIN goal_sheets gs ON gs.user_id = e.id
+            LEFT JOIN checkins c ON c.sheet_id = gs.id
+            WHERE m.role='manager'
+            GROUP BY m.id
+            ORDER BY m.name
+            """
+        )
         return {
             "total_sheets": total,
             "locked_sheets": locked,
@@ -740,7 +782,37 @@ class Store:
             "draft_sheets": draft,
             "completion_rate": round((locked / total) * 100, 1) if total else 0,
             "checkins": checkins,
+            "uom_distribution": uom_distribution,
+            "department_completion": department_completion,
+            "manager_effectiveness": manager_effectiveness,
         }
+
+    def notification_preview(self, role: str) -> list[dict[str, Any]]:
+        base = [
+            {
+                "channel": "Email",
+                "event": "Goal sheet submitted",
+                "audience": "Manager",
+                "copy": "An employee has submitted goals and is waiting for your review.",
+            },
+            {
+                "channel": "Teams",
+                "event": "Approval reminder",
+                "audience": "Manager",
+                "copy": "A goal sheet has been pending for more than 2 days. Open the approval queue.",
+            },
+            {
+                "channel": "Email",
+                "event": "Quarterly check-in window",
+                "audience": "Employee",
+                "copy": "The current quarter window is open. Update planned vs actual achievement.",
+            },
+        ]
+        if role == "employee":
+            return [item for item in base if item["audience"] == "Employee"]
+        if role == "manager":
+            return [item for item in base if item["audience"] == "Manager"]
+        return base
 
     def app_state(self, user: dict[str, Any]) -> dict[str, Any]:
         state: dict[str, Any] = {
@@ -750,6 +822,7 @@ class Store:
             "employees": self.fetchall("SELECT id,name,email,role,title,department,manager_id FROM users WHERE role='employee' ORDER BY name"),
             "managers": self.fetchall("SELECT id,name,email,role,title,department FROM users WHERE role='manager' ORDER BY name"),
             "shared_goals": self.fetchall("SELECT * FROM shared_goals ORDER BY id DESC"),
+            "notifications": self.notification_preview(user["role"]),
         }
         if user["role"] == "employee":
             sheet = self.get_sheet_for_user(user["id"])
@@ -762,6 +835,15 @@ class Store:
             state["all_sheets"] = self.all_sheets()
             state["audit_logs"] = self.audit_logs()
             state["escalation_rules"] = self.fetchall("SELECT * FROM escalation_rules ORDER BY id")
+            state["escalation_events"] = self.fetchall(
+                """
+                SELECT ev.*, er.name AS rule_name, u.name AS employee_name
+                FROM escalation_events ev
+                JOIN escalation_rules er ON er.id = ev.rule_id
+                LEFT JOIN users u ON u.id = ev.user_id
+                ORDER BY ev.id DESC
+                """
+            )
         return state
 
     def audit_logs(self) -> list[dict[str, Any]]:

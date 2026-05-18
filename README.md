@@ -74,3 +74,15 @@ git push -u origin main
 - The default date-based windows follow the problem statement.
 - For a live demo of quarterly progress capture, sign in as Admin and adjust the relevant quarter window to include today's date.
 - The app intentionally keeps setup cheap: no paid APIs, no build step, and no dependency install required for the local demo.
+
+## Deployment
+
+The repo includes `render.yaml` and a `Procfile`.
+
+Recommended hackathon path:
+
+1. Push to a public GitHub repo.
+2. Import the repo into Render.
+3. Use the generated live URL in the submission form.
+
+More detail is in `docs/deployment.md`.

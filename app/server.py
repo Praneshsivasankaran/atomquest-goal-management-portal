@@ -212,16 +212,17 @@ class ApiServer(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def run_server(port: int, db_path: str | Path = DEFAULT_DB) -> None:
+def run_server(port: int, db_path: str | Path = DEFAULT_DB, host: str = "127.0.0.1") -> None:
     ApiServer.store = Store(db_path)
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), ApiServer)
-    print(f"Goal portal running at http://127.0.0.1:{port}")
+    httpd = ThreadingHTTPServer((host, port), ApiServer)
+    print(f"Goal portal running at http://{host}:{port}")
     httpd.serve_forever()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the AtomQuest Goal Portal demo server.")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default=os.getenv("HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")))
     parser.add_argument("--db", default=str(DEFAULT_DB))
     parser.add_argument("--seed-only", action="store_true")
     args = parser.parse_args()
@@ -233,7 +234,7 @@ def main() -> None:
         print(f"Demo data reset at {utc_now()}")
         return
 
-    run_server(args.port, args.db)
+    run_server(args.port, args.db, args.host)
 
 
 if __name__ == "__main__":

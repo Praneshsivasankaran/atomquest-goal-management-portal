@@ -142,6 +142,11 @@ function renderApp() {
         <div class="topbar-inner">
           <div class="brand-mark"><span class="brand-dot">A</span> Goal Portal</div>
           <div class="actions">
+            <select class="role-switch" data-role-switch title="Switch demo role">
+              ${demoUsers
+                .map((demo) => `<option value="${esc(demo.email)}" ${demo.email === user.email ? "selected" : ""}>${esc(demo.role)}</option>`)
+                .join("")}
+            </select>
             <div class="user-pill">
               <div class="avatar">${esc(initials(user.name))}</div>
               <div>
@@ -174,6 +179,91 @@ function renderMetrics() {
       <div class="metric"><span>Locked / Approved</span><strong>${metrics.locked_sheets || 0}</strong></div>
       <div class="metric"><span>Pending Approval</span><strong>${metrics.submitted_sheets || 0}</strong></div>
       <div class="metric"><span>Completion Rate</span><strong>${metrics.completion_rate || 0}%</strong></div>
+    </section>
+  `;
+}
+
+function renderBarRows(items, mode = "count") {
+  if (!items?.length) return `<div class="empty">No analytics data yet.</div>`;
+  const max = Math.max(...items.map((item) => Number(item.count || item.total || item.team_sheets || 1)));
+  return `
+    <div class="bar-list">
+      ${items
+        .map((item) => {
+          const label = item.label || "Unknown";
+          let value = Number(item.count || 0);
+          let suffix = `${value}`;
+          let percent = max ? (value / max) * 100 : 0;
+          if (mode === "completion") {
+            const total = Number(item.total || 0);
+            const complete = Number(item.complete || 0);
+            value = total ? Math.round((complete / total) * 100) : 0;
+            percent = value;
+            suffix = `${value}%`;
+          }
+          if (mode === "manager") {
+            const possible = Number(item.team_sheets || 0) * 4;
+            value = possible ? Math.round((Number(item.checkins || 0) / possible) * 100) : 0;
+            percent = value;
+            suffix = `${value}%`;
+          }
+          return `
+            <div class="bar-row">
+              <strong>${esc(titleCase(label))}</strong>
+              <div class="progress-bar"><span style="width:${Math.min(percent, 100)}%"></span></div>
+              <span>${esc(suffix)}</span>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderAnalyticsPanel() {
+  const metrics = state.metrics || {};
+  return `
+    <section class="panel" style="margin-top:18px">
+      <h2>Analytics Snapshot</h2>
+      <p>Quick charts for the areas judges usually ask about: completion, goal mix, and manager follow-through.</p>
+      <div class="grid-three">
+        <div>
+          <h3>Goal Distribution</h3>
+          ${renderBarRows(metrics.uom_distribution || [])}
+        </div>
+        <div>
+          <h3>Department Completion</h3>
+          ${renderBarRows(metrics.department_completion || [], "completion")}
+        </div>
+        <div>
+          <h3>Manager Effectiveness</h3>
+          ${renderBarRows(metrics.manager_effectiveness || [], "manager")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderNotifications() {
+  const notifications = state.notifications || [];
+  if (!notifications.length) return "";
+  return `
+    <section class="panel" style="margin-top:18px">
+      <h2>Notification Preview</h2>
+      <p>Email and Teams-ready messages are modeled for the bonus workflow without requiring paid services in the demo.</p>
+      <div class="notice-grid">
+        ${notifications
+          .map(
+            (item) => `
+              <div class="notice">
+                <span class="chip">${esc(item.channel)}</span>
+                <strong>${esc(item.event)}</strong>
+                <span>${esc(item.copy)}</span>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
     </section>
   `;
 }
@@ -247,6 +337,8 @@ function renderEmployee() {
       ${renderCyclePanel()}
     </section>
     ${renderMetrics()}
+    ${renderAnalyticsPanel()}
+    ${renderNotifications()}
     <section class="grid-two">
       <div class="panel">
         <h2>Add Goal</h2>
@@ -473,6 +565,8 @@ function renderManager() {
       ${renderCyclePanel()}
     </section>
     ${renderMetrics()}
+    ${renderAnalyticsPanel()}
+    ${renderNotifications()}
     <section class="panel">
       <h2>Approval Queue</h2>
       <p>Inline edits are available only while a sheet is submitted for review.</p>
@@ -592,6 +686,8 @@ function renderAdmin() {
       ${renderCyclePanel()}
     </section>
     ${renderMetrics()}
+    ${renderAnalyticsPanel()}
+    ${renderNotifications()}
     <section class="grid-two">
       <div class="panel">
         <h2>Cycle Windows</h2>
@@ -610,10 +706,41 @@ function renderAdmin() {
       ${renderAdminSheets()}
     </section>
     <section class="panel" style="margin-top:18px">
+      <h2>Escalation Monitor</h2>
+      <p>Rule-based escalation events are visible to HR for follow-up.</p>
+      ${renderEscalations()}
+    </section>
+    <section class="panel" style="margin-top:18px">
       <h2>Audit Trail</h2>
       <p>Every meaningful workflow change is stored for governance review.</p>
       ${renderAuditLog()}
     </section>
+  `;
+}
+
+function renderEscalations() {
+  const events = state.escalation_events || [];
+  if (!events.length) return `<div class="empty">No escalation events are open.</div>`;
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Rule</th><th>Employee</th><th>Status</th><th>Message</th></tr></thead>
+        <tbody>
+          ${events
+            .map(
+              (event) => `
+                <tr>
+                  <td>${esc(event.rule_name)}</td>
+                  <td>${esc(event.employee_name || "-")}</td>
+                  <td><span class="status submitted">${esc(titleCase(event.status))}</span></td>
+                  <td>${esc(event.message)}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -886,7 +1013,24 @@ async function handleClick(event) {
 
 document.addEventListener("submit", handleSubmit);
 document.addEventListener("click", handleClick);
+document.addEventListener("change", async (event) => {
+  const switcher = event.target.closest("[data-role-switch]");
+  if (!switcher) return;
+  const demo = demoUsers.find((item) => item.email === switcher.value);
+  if (!demo) return;
+  try {
+    const result = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: demo.email, password: demo.password }),
+    });
+    token = result.token;
+    localStorage.setItem(storageKey, token);
+    showToast(`Switched to ${demo.role}`);
+    await refresh();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
 
 // Keep the boot path boring and quick. The real work happens after app-state loads.
 refresh();
-
