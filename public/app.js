@@ -118,16 +118,38 @@ function renderLogin() {
     <main class="login">
       <section class="login-copy">
         <div>
-          <div class="brand-mark"><span class="brand-dot">A</span> AtomQuest</div>
-          <h1>Goal clarity for every employee, manager, and HR team.</h1>
-          <p>A polished goal management workspace for creation, approval, tracking, shared KPIs, analytics, escalations, and audit-ready governance.</p>
+          <div class="auth-topline">
+            <div class="brand-mark"><span class="brand-dot">A</span> AtomQuest</div>
+            <span class="auth-badge">Goal OS for HR teams</span>
+          </div>
+          <h1>Run employee goals from draft to appraisal without spreadsheet chaos.</h1>
+          <p>A polished workspace for goal creation, approvals, quarterly achievement tracking, shared KPIs, analytics, escalations, and audit-ready governance.</p>
           <div class="auth-proof-grid">
             <div><strong>100%</strong><span>weightage validation</span></div>
             <div><strong>3</strong><span>role-based journeys</span></div>
             <div><strong>Q1-Q4</strong><span>check-in lifecycle</span></div>
           </div>
+          <div class="auth-showcase">
+            <div>
+              <span>Current Cycle</span>
+              <strong>FY 2026 Goal Cycle</strong>
+            </div>
+            <div>
+              <span>Approval Queue</span>
+              <strong>2 waiting</strong>
+            </div>
+            <div>
+              <span>Completion</span>
+              <strong>64%</strong>
+            </div>
+          </div>
         </div>
-        <p>Built as an enterprise HR-tech MVP with signup, seeded demo profiles, smart goal suggestions, and submission-ready documentation.</p>
+        <div class="auth-feature-list">
+          <span>Manager approval</span>
+          <span>Shared goals</span>
+          <span>Audit trail</span>
+          <span>Excel reports</span>
+        </div>
       </section>
       <section class="login-panel">
         <div class="login-card">
@@ -190,6 +212,7 @@ function renderLogin() {
                     </div>
                   </div>
                   <button class="btn auth-submit" type="submit">Create Account</button>
+                  <p class="auth-footnote">New Employee accounts start with a draft goal sheet. Manager and Admin accounts open directly into their workspace.</p>
                 </form>
               `
               : `
@@ -215,6 +238,7 @@ function renderLogin() {
                     <input name="password" type="password" value="demo123" required autocomplete="current-password" />
                   </div>
                   <button class="btn auth-submit" type="submit">Enter Portal</button>
+                  <p class="auth-footnote">Tip: use the role cards above for a fast judge demo, or create a fresh account from Sign up.</p>
                 </form>
               `
           }
